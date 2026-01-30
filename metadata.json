@@ -1,0 +1,7 @@
+{
+  "name": "ReactFrame Pro",
+  "description": "A professional-grade in-browser video editor that allows users to layer dynamic React components onto video tracks using a familiar timeline interface. Features AI-generated component creation.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

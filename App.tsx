@@ -1,0 +1,389 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { LayersIcon, DownloadIcon, SunIcon, MoonIcon } from './components/ui/Icons';
+import AssetsPanel from './components/panels/AssetsPanel';
+import SettingsPanel from './components/panels/SettingsPanel';
+import PropertiesPanel from './components/panels/PropertiesPanel';
+import VideoPreview, { VideoPreviewHandle } from './components/preview/VideoPreview';
+import Timeline from './components/timeline/Timeline';
+import { ProjectState, Track, EditorElement, ElementType, ElementProps } from './types';
+import { DEFAULT_TRACKS, INITIAL_DURATION, PIXELS_PER_SECOND_DEFAULT } from './constants';
+import { getAssetById } from './utils/db';
+
+function App() {
+  const previewRef = useRef<VideoPreviewHandle>(null);
+  const [pixelsPerSecond, setPixelsPerSecond] = useState(PIXELS_PER_SECOND_DEFAULT);
+  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  
+  const [project, setProject] = useState<ProjectState>({
+    currentTime: 0,
+    duration: INITIAL_DURATION,
+    isPlaying: false,
+    zoomLevel: 1,
+    elements: [],
+    tracks: DEFAULT_TRACKS,
+    selectedElementId: null,
+    videoSrc: null,
+    isExporting: false,
+  });
+
+  // Handle Theme
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
+  const toggleTheme = () => setIsDarkMode(!isDarkMode);
+
+  // Handle Playback Timer
+  useEffect(() => {
+    let animationFrame: number;
+    let lastTime = performance.now();
+
+    const updateLoop = () => {
+      const now = performance.now();
+      const delta = (now - lastTime) / 1000;
+      lastTime = now;
+
+      if (project.isPlaying) {
+        setProject(prev => {
+          if (prev.currentTime >= prev.duration) {
+            return { ...prev, isPlaying: false, currentTime: 0 };
+          }
+          return { ...prev, currentTime: prev.currentTime + delta };
+        });
+        animationFrame = requestAnimationFrame(updateLoop);
+      }
+    };
+
+    if (project.isPlaying) {
+      lastTime = performance.now();
+      animationFrame = requestAnimationFrame(updateLoop);
+    }
+
+    return () => cancelAnimationFrame(animationFrame);
+  }, [project.isPlaying, project.duration]);
+
+  const togglePlay = useCallback(() => {
+    setProject(prev => ({ ...prev, isPlaying: !prev.isPlaying }));
+  }, []);
+
+  const handleSeek = useCallback((time: number) => {
+    setProject(prev => ({ ...prev, currentTime: time }));
+  }, []);
+
+  const handleUpdateDuration = useCallback((duration: number) => {
+    setProject(prev => ({ ...prev, duration: Math.max(duration, prev.duration) }));
+  }, []);
+
+  const handleUploadMedia = (file: File, type: ElementType) => {
+    const url = URL.createObjectURL(file);
+    handleAddElement(type, { src: url, name: file.name });
+  };
+
+  const handleAddAssetToTrack = async (assetId: string, trackId: number, startTime: number) => {
+      const asset = await getAssetById(assetId);
+      if (asset) {
+          const url = URL.createObjectURL(asset.blob);
+          handleAddElement(asset.type, { src: url, name: asset.name }, trackId, startTime);
+      }
+  };
+
+  const handleAddElement = (type: ElementType, customProps?: any, overrideTrackId?: number, overrideStartTime?: number) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    
+    let defaultProps: ElementProps = {};
+    let width = 20; 
+    let height = 10;
+    let name = "New Element";
+    let duration = 5;
+    
+    // Config based on type
+    switch(type) {
+        case ElementType.TEXT:
+            name = "Text Layer";
+            defaultProps = { text: "Double Click Edit", color: isDarkMode ? "#ffffff" : "#000000", fontSize: 24, backgroundColor: "transparent" };
+            break;
+        case ElementType.SHAPE:
+            name = "Rectangle";
+            defaultProps = { backgroundColor: "#ef4444", borderRadius: 4, opacity: 1 };
+            height = 20;
+            break;
+        case ElementType.AI_GENERATED:
+            name = customProps?.name || "AI Component";
+            defaultProps = { ...customProps };
+            width = 30; height = 30; // Default size for AI components
+            break;
+        case ElementType.VIDEO:
+            name = customProps?.name || "Video Clip";
+            defaultProps = { src: customProps?.src, volume: 1, isMuted: false };
+            width = 100; height = 100;
+            duration = 10; 
+            break;
+        case ElementType.AUDIO:
+            name = customProps?.name || "Audio Track";
+            defaultProps = { src: customProps?.src, volume: 1, isMuted: false };
+            duration = 30; 
+            break;
+        case ElementType.IMAGE:
+            name = customProps?.name || "Image";
+            defaultProps = { src: customProps?.src };
+            width = 30; height = 30;
+            break;
+    }
+
+    // Smart Track Logic
+    let trackId = 0;
+    
+    if (overrideTrackId !== undefined) {
+        trackId = overrideTrackId;
+    } else {
+        // Find free track
+        const startTime = overrideStartTime !== undefined ? overrideStartTime : project.currentTime;
+        const endTime = startTime + duration;
+
+        let foundTrackId = -1;
+        // Sort tracks by ID to check sequentially
+        const sortedTracks = [...project.tracks].sort((a, b) => a.id - b.id);
+
+        for (const track of sortedTracks) {
+            // Check for overlap on this track
+            const hasOverlap = project.elements.some(el =>
+                el.trackId === track.id &&
+                // Check intersection: (StartA < EndB) and (EndA > StartB)
+                (el.startTime < endTime && (el.startTime + el.duration) > startTime)
+            );
+            
+            if (!hasOverlap) {
+                foundTrackId = track.id;
+                break;
+            }
+        }
+
+        if (foundTrackId !== -1) {
+            trackId = foundTrackId;
+        } else {
+            // Create new track if all existing ones are occupied
+            const maxId = sortedTracks.length > 0 ? Math.max(...sortedTracks.map(t => t.id)) : -1;
+            const newTrackId = maxId + 1;
+            const newTrack: Track = {
+                id: newTrackId,
+                name: `Layer ${newTrackId + 1}`,
+                isVisible: true,
+                isLocked: false,
+                type: 'overlay'
+            };
+            
+            // We need to update state immediately to reflect new track
+            setProject(prev => ({
+                ...prev,
+                tracks: [...prev.tracks, newTrack]
+            }));
+            trackId = newTrackId;
+        }
+    }
+
+    const newElement: EditorElement = {
+      id,
+      type,
+      trackId, 
+      name,
+      startTime: overrideStartTime !== undefined ? overrideStartTime : project.currentTime,
+      duration,
+      mediaOffset: 0,
+      x: 50 - (width/2),
+      y: 50 - (height/2),
+      width,
+      height,
+      rotation: 0,
+      props: defaultProps
+    };
+
+    setProject(prev => ({
+      ...prev,
+      elements: [...prev.elements, newElement],
+      selectedElementId: id
+    }));
+  };
+
+  const handleSelectElement = (id: string | null) => {
+    setProject(prev => ({ ...prev, selectedElementId: id }));
+  };
+
+  const handleUpdateElement = (id: string, updates: Partial<EditorElement>) => {
+    setProject(prev => ({
+      ...prev,
+      elements: prev.elements.map(el => el.id === id ? { ...el, ...updates } : el)
+    }));
+  };
+  
+  const handleDeleteElement = (id: string) => {
+      setProject(prev => ({
+          ...prev,
+          elements: prev.elements.filter(el => el.id !== id),
+          selectedElementId: null
+      }));
+  };
+
+  const handleSplit = () => {
+      const time = project.currentTime;
+      setProject(prev => {
+          const newElements = [...prev.elements];
+          let modified = false;
+
+          prev.elements.forEach(el => {
+              if (time > el.startTime && time < el.startTime + el.duration) {
+                  if (prev.selectedElementId && el.id !== prev.selectedElementId) return;
+                  modified = true;
+                  const splitPointRelative = time - el.startTime;
+                  const originalDuration = el.duration;
+                  const leftDuration = splitPointRelative;
+                  const rightDuration = originalDuration - leftDuration;
+                  const newId = Math.random().toString(36).substr(2, 9);
+                  
+                  const rightPart: EditorElement = {
+                      ...el,
+                      id: newId,
+                      startTime: time,
+                      duration: rightDuration,
+                      mediaOffset: el.mediaOffset + leftDuration,
+                      name: el.name + " (Copy)"
+                  };
+                  
+                  const index = newElements.findIndex(e => e.id === el.id);
+                  newElements[index] = { ...el, duration: leftDuration };
+                  newElements.push(rightPart);
+              }
+          });
+          return modified ? { ...prev, elements: newElements, selectedElementId: null } : prev;
+      });
+  };
+
+  const handleExport = async () => {
+    if (!previewRef.current) return;
+    if(!confirm("Start recording playback for export? The video will play from start to finish.")) return;
+
+    try {
+        setProject(prev => ({ ...prev, currentTime: 0, isPlaying: true }));
+        const stream = previewRef.current.captureStream(30);
+        const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        
+        const chunks: BlobPart[] = [];
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) chunks.push(e.data);
+        };
+        
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `reactframe_project_${Date.now()}.webm`;
+            a.click();
+            setProject(prev => ({ ...prev, isPlaying: false }));
+        };
+
+        mediaRecorder.start();
+        setTimeout(() => {
+            mediaRecorder.stop();
+        }, project.duration * 1000);
+
+    } catch (e) {
+        console.error(e);
+        alert("Browser does not support capturing this stream directly.");
+    }
+  };
+
+  const selectedElement = project.elements.find(el => el.id === project.selectedElementId) || null;
+
+  return (
+    <div className="flex flex-col h-screen bg-white dark:bg-black text-gray-900 dark:text-white transition-colors duration-200">
+      {/* Header */}
+      <header className="h-12 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center px-4 justify-between z-50 transition-colors">
+        <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center shadow-md">
+                <LayersIcon className="text-white" />
+            </div>
+            <h1 className="font-bold text-lg tracking-tight text-gray-900 dark:text-white">ReactFrame <span className="text-blue-600 dark:text-blue-500">Pro</span></h1>
+        </div>
+        <div className="flex items-center space-x-4">
+             <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors">
+                {isDarkMode ? <SunIcon className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />}
+             </button>
+             <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="text-xs px-3 py-1.5 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+             >
+                Settings
+             </button>
+             <div className="text-xs text-gray-500 dark:text-gray-500">v2.2-smart-layers</div>
+             <button 
+                onClick={handleExport}
+                className="bg-blue-600 hover:bg-blue-700 dark:hover:bg-blue-500 px-4 py-1.5 rounded text-xs font-semibold transition flex items-center space-x-2 text-white shadow-sm"
+             >
+                 <DownloadIcon className="w-4 h-4" />
+                 <span>Export</span>
+             </button>
+        </div>
+      </header>
+
+      {/* Main Workspace */}
+      <div className="flex-1 flex overflow-hidden">
+        
+        {/* Left: Assets */}
+        <AssetsPanel 
+            onAddElement={handleAddElement} 
+            onUploadMedia={handleUploadMedia}
+        />
+
+        {/* Center: Preview */}
+        <div className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-950 relative transition-colors">
+          <VideoPreview 
+            ref={previewRef}
+            currentTime={project.currentTime}
+            isPlaying={project.isPlaying}
+            elements={project.elements}
+            selectedElementId={project.selectedElementId}
+            onSelectElement={handleSelectElement}
+            onUpdateElement={handleUpdateElement}
+            onTimeUpdate={handleSeek}
+            onDurationChange={handleUpdateDuration}
+            togglePlay={togglePlay}
+          />
+        </div>
+
+        {/* Right: Properties */}
+        <PropertiesPanel 
+            element={selectedElement} 
+            onUpdate={handleUpdateElement}
+            onDelete={handleDeleteElement}
+        />
+      </div>
+
+      {/* Bottom: Timeline */}
+      <div className="h-[300px] flex-shrink-0 z-40 relative shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] dark:shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)]">
+        <Timeline 
+            tracks={project.tracks}
+            elements={project.elements}
+            currentTime={project.currentTime}
+            duration={project.duration}
+            onSeek={handleSeek}
+            onSelectElement={handleSelectElement}
+            selectedElementId={project.selectedElementId}
+            onUpdateElement={handleUpdateElement}
+            onSplit={handleSplit}
+            pixelsPerSecond={pixelsPerSecond}
+            setPixelsPerSecond={setPixelsPerSecond}
+            onAddAsset={handleAddAssetToTrack}
+        />
+      </div>
+
+      <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+    </div>
+  );
+}
+
+export default App;
