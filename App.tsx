@@ -39,6 +39,12 @@ function App() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isRestoring, setIsRestoring] = useState(true);
+  const [timelineHeight, setTimelineHeight] = useState(300);
+  const [isResizingTimeline, setIsResizingTimeline] = useState(false);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(280);
+  const [rightPanelWidth, setRightPanelWidth] = useState(300);
+  const [isResizingLeft, setIsResizingLeft] = useState(false);
+  const [isResizingRight, setIsResizingRight] = useState(false);
 
   // Load initial state from localStorage
   const persistedState = loadPersistedProject();
@@ -152,6 +158,44 @@ function App() {
     setProject(prev => ({ ...prev, isPlaying: !prev.isPlaying }));
   }, []);
 
+  // Panel resize effect
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizingTimeline) {
+        const newHeight = window.innerHeight - e.clientY;
+        setTimelineHeight(Math.max(150, Math.min(600, newHeight)));
+      }
+      if (isResizingLeft) {
+        setLeftPanelWidth(Math.max(200, Math.min(450, e.clientX)));
+      }
+      if (isResizingRight) {
+        setRightPanelWidth(Math.max(200, Math.min(450, window.innerWidth - e.clientX)));
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingTimeline(false);
+      setIsResizingLeft(false);
+      setIsResizingRight(false);
+    };
+
+    const isResizing = isResizingTimeline || isResizingLeft || isResizingRight;
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = isResizingTimeline ? 'ns-resize' : 'ew-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizingTimeline, isResizingLeft, isResizingRight]);
+
   const handleSeek = useCallback((time: number) => {
     setProject(prev => ({ ...prev, currentTime: time }));
   }, []);
@@ -212,7 +256,7 @@ function App() {
       case ElementType.IMAGE:
         name = customProps?.name || "Image";
         defaultProps = { src: customProps?.src };
-        width = 30; height = 30;
+        width = 100; height = 100; // Full size by default
         break;
     }
 
@@ -275,11 +319,12 @@ function App() {
       startTime: overrideStartTime !== undefined ? overrideStartTime : project.currentTime,
       duration,
       mediaOffset: 0,
-      x: 50 - (width / 2),
-      y: 50 - (height / 2),
+      x: type === ElementType.VIDEO || type === ElementType.IMAGE ? 0 : 50 - (width / 2),
+      y: type === ElementType.VIDEO || type === ElementType.IMAGE ? 0 : 50 - (height / 2),
       width,
       height,
       rotation: 0,
+      zIndex: project.elements.length, // New elements on top
       props: defaultProps,
       ...(customProps?.assetId && { assetId: customProps.assetId })
     } as EditorElement;
@@ -408,6 +453,7 @@ function App() {
         width: 0,
         height: 0,
         rotation: 0,
+        zIndex: updatedElements.length, // Add zIndex
         props: {
           src: videoElement.props.src,
           volume: videoElement.props.volume ?? 1,
@@ -598,14 +644,25 @@ function App() {
       {/* Main Workspace */}
       <div className="flex-1 flex overflow-hidden">
 
-        {/* Left: Assets */}
-        <AssetsPanel
-          onAddElement={handleAddElement}
-          onUploadMedia={handleUploadMedia}
-        />
+        {/* Left: Assets Panel with resize handle */}
+        <div className="flex-shrink-0 relative" style={{ width: `${leftPanelWidth}px` }}>
+          <AssetsPanel
+            onAddElement={handleAddElement}
+            onUploadMedia={handleUploadMedia}
+            panelWidth={leftPanelWidth}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+          />
+          {/* Right edge resize handle */}
+          <div
+            className="absolute top-0 right-0 bottom-0 w-1 cursor-ew-resize z-30 hover:bg-blue-500/50 transition-colors group"
+            onMouseDown={() => setIsResizingLeft(true)}
+          >
+            <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1 h-8 rounded-full bg-gray-300 dark:bg-gray-600 group-hover:bg-blue-500 transition-colors" />
+          </div>
+        </div>
 
         {/* Center: Preview */}
-        <div className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-950 relative transition-colors">
+        <div className="flex-1 flex flex-col bg-gray-50 dark:bg-gray-950 relative transition-colors min-w-0">
           <VideoPreview
             ref={previewRef}
             currentTime={project.currentTime}
@@ -620,17 +677,39 @@ function App() {
           />
         </div>
 
-        {/* Right: Properties */}
-        <PropertiesPanel
-          element={selectedElement}
-          onUpdate={handleUpdateElement}
-          onDelete={handleDeleteElement}
-          onSplitAudio={handleSplitAudio}
-        />
+        {/* Right: Properties Panel with resize handle */}
+        <div className="flex-shrink-0 relative" style={{ width: `${rightPanelWidth}px` }}>
+          {/* Left edge resize handle */}
+          <div
+            className="absolute top-0 left-0 bottom-0 w-1 cursor-ew-resize z-30 hover:bg-blue-500/50 transition-colors group"
+            onMouseDown={() => setIsResizingRight(true)}
+          >
+            <div className="absolute top-1/2 left-0 -translate-y-1/2 w-1 h-8 rounded-full bg-gray-300 dark:bg-gray-600 group-hover:bg-blue-500 transition-colors" />
+          </div>
+          <PropertiesPanel
+            element={selectedElement}
+            onUpdate={handleUpdateElement}
+            onDelete={handleDeleteElement}
+            onSplitAudio={handleSplitAudio}
+            panelWidth={rightPanelWidth}
+          />
+        </div>
       </div>
 
       {/* Bottom: Timeline */}
-      <div className="h-[300px] flex-shrink-0 z-40 relative shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] dark:shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)]">
+      <div
+        className="flex-shrink-0 z-40 relative shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] dark:shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)]"
+        style={{ height: `${timelineHeight}px` }}
+      >
+        {/* Resize Handle */}
+        <div
+          className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize z-50 group"
+          onMouseDown={() => setIsResizingTimeline(true)}
+        >
+          <div className="absolute inset-x-0 top-0 h-1 bg-transparent group-hover:bg-blue-500/50 transition-colors" />
+          <div className="absolute left-1/2 top-0 -translate-x-1/2 w-12 h-1 rounded-full bg-gray-300 dark:bg-gray-600 group-hover:bg-blue-500 transition-colors" />
+        </div>
+
         <Timeline
           tracks={project.tracks}
           elements={project.elements}

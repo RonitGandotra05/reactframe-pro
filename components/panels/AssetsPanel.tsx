@@ -1,21 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TypeIcon, SquareIcon, UploadIcon, SparklesIcon, VideoIcon, MusicIcon, ImageIcon, PlusIcon, PlayIcon, LayersIcon } from '../ui/Icons';
+import { TypeIcon, SquareIcon, UploadIcon, SparklesIcon, VideoIcon, MusicIcon, ImageIcon, PlusIcon, PlayIcon, LayersIcon, TrashIcon, MonitorIcon, CameraIcon } from '../ui/Icons';
 import { ElementType } from '../../types';
 import { generateComponentConfig, generateImage, getStoredApiKey } from '../../services/geminiService';
 import { saveAsset, getAssets, deleteAsset, MediaAsset } from '../../utils/db';
+import { ConfirmDialog, InputDialog } from '../ui/Modal';
 
 interface AssetsPanelProps {
   onAddElement: (type: ElementType, props?: any) => void;
-  onUploadMedia: (file: File, type: ElementType) => void; // Legacy prop, we'll intercept this
+  onUploadMedia: (file: File, type: ElementType) => void;
+  panelWidth?: number;
+  onOpenSettings?: () => void;
 }
 
-const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddElement }) => {
+const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddElement, panelWidth, onOpenSettings }) => {
   const [activeTab, setActiveTab] = useState<'library' | 'image'>('library');
   const [libraryAssets, setLibraryAssets] = useState<MediaAsset[]>([]);
 
   // Recorder State
   const [isRecording, setIsRecording] = useState(false);
   const [recordingType, setRecordingType] = useState<ElementType.VIDEO | ElementType.AUDIO | null>(null);
+  const [recordingMode, setRecordingMode] = useState<'camera' | 'screen' | null>(null);
+  const [showRecordingOptions, setShowRecordingOptions] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -24,6 +29,10 @@ const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddElement }) => {
   const [prompt, setPrompt] = useState('');
   const [imgPrompt, setImgPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Modal States
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; assetId: string | null }>({ isOpen: false, assetId: null });
+  const [errorModal, setErrorModal] = useState<{ isOpen: boolean; title: string; message: string }>({ isOpen: false, title: '', message: '' });
 
   useEffect(() => {
     refreshLibrary();
@@ -53,29 +62,98 @@ const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddElement }) => {
     e.dataTransfer.effectAllowed = 'copy';
   };
 
-  const handleDeleteAsset = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteAsset = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm('Remove from library?')) {
-      await deleteAsset(id);
+    setDeleteConfirm({ isOpen: true, assetId: id });
+  };
+
+  const confirmDeleteAsset = async () => {
+    if (deleteConfirm.assetId) {
+      await deleteAsset(deleteConfirm.assetId);
       refreshLibrary();
     }
   };
 
   // -- Recorder Logic --
-  const startRecording = async (type: ElementType.VIDEO | ElementType.AUDIO) => {
+  const startRecording = async (type: ElementType.VIDEO | ElementType.AUDIO, mode: 'camera' | 'screen' = 'camera') => {
     try {
       setRecordingType(type);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: type === ElementType.VIDEO,
-        audio: true
-      });
+      setRecordingMode(mode);
 
-      if (videoPreviewRef.current && type === ElementType.VIDEO) {
-        videoPreviewRef.current.srcObject = stream;
-        videoPreviewRef.current.play();
+      let stream: MediaStream;
+      let previewStream: MediaStream; // Separate stream for preview
+
+      if (type === ElementType.AUDIO) {
+        // Audio only recording
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        previewStream = stream;
+      } else if (mode === 'screen') {
+        // Screen share recording with optional audio
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            cursor: 'always',
+            displaySurface: 'monitor'
+          } as any,
+          audio: true // Request system audio (user can choose to share)
+        });
+
+        // Use display stream for preview
+        previewStream = displayStream;
+
+        // Try to get microphone audio as well for narration
+        try {
+          const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          const audioContext = new AudioContext();
+          const destination = audioContext.createMediaStreamDestination();
+
+          // Mix both audio streams
+          const displayAudio = displayStream.getAudioTracks();
+          const micAudio = micStream.getAudioTracks();
+
+          if (displayAudio.length > 0) {
+            const displaySource = audioContext.createMediaStreamSource(new MediaStream(displayAudio));
+            displaySource.connect(destination);
+          }
+          if (micAudio.length > 0) {
+            const micSource = audioContext.createMediaStreamSource(new MediaStream(micAudio));
+            micSource.connect(destination);
+          }
+
+          // Create combined stream for recording
+          stream = new MediaStream([
+            ...displayStream.getVideoTracks(),
+            ...destination.stream.getAudioTracks()
+          ]);
+
+          // Store cleanup for mic stream
+          displayStream.getVideoTracks()[0].onended = () => {
+            micStream.getTracks().forEach(t => t.stop());
+          };
+        } catch (micErr) {
+          // Mic not available, use display stream only
+          stream = displayStream;
+        }
+      } else {
+        // Camera recording
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
+        previewStream = stream;
       }
 
-      const recorder = new MediaRecorder(stream);
+      // Set up video preview
+      if (videoPreviewRef.current && type === ElementType.VIDEO) {
+        videoPreviewRef.current.srcObject = previewStream;
+        videoPreviewRef.current.muted = true;
+        try {
+          await videoPreviewRef.current.play();
+        } catch (playErr) {
+          console.log('Auto-play prevented, user interaction may be needed');
+        }
+      }
+
+      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
       const chunks: BlobPart[] = [];
 
       recorder.ondataavailable = (e) => {
@@ -88,13 +166,24 @@ const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddElement }) => {
         stream.getTracks().forEach(track => track.stop());
 
         // Save to DB
-        const name = `Recording ${new Date().toLocaleTimeString()}`;
+        const modeLabel = mode === 'screen' ? 'Screen' : 'Camera';
+        const name = `${modeLabel} Recording ${new Date().toLocaleTimeString()}`;
         await saveAsset(blob, type, name);
         await refreshLibrary();
         setIsRecording(false);
         setRecordingType(null);
+        setRecordingMode(null);
         setRecordingTime(0);
       };
+
+      // Handle when user stops screen share from browser UI
+      if (mode === 'screen') {
+        stream.getVideoTracks()[0].onended = () => {
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+          }
+        };
+      }
 
       recorder.start();
       mediaRecorderRef.current = recorder;
@@ -105,7 +194,7 @@ const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddElement }) => {
         setRecordingTime(t => t + 1);
       }, 1000);
 
-      // Cleanup timer on stop (hacky for this simplified scope, ideally use useEffect)
+      // Cleanup timer on stop
       const originalStop = recorder.stop;
       recorder.stop = () => {
         clearInterval(interval);
@@ -114,7 +203,11 @@ const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddElement }) => {
 
     } catch (err) {
       console.error("Error accessing media devices:", err);
-      alert("Could not access camera/microphone");
+      const errorMessage = mode === 'screen'
+        ? 'Could not share your screen. Please check your browser permissions or try a different browser.'
+        : 'Could not access your camera or microphone. Please check your browser permissions.';
+      setErrorModal({ isOpen: true, title: 'Recording Error', message: errorMessage });
+      setRecordingMode(null);
     }
   };
 
@@ -128,7 +221,8 @@ const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddElement }) => {
   const handleComponentGenerate = async () => {
     if (!prompt.trim()) return;
     if (!getStoredApiKey()) {
-      alert('Please add your Gemini API key in Settings to use AI generation.');
+      setErrorModal({ isOpen: true, title: 'API Key Required', message: 'Please add your Gemini API key in Settings to use AI generation.' });
+      if (onOpenSettings) onOpenSettings();
       return;
     }
     setIsGenerating(true);
@@ -142,25 +236,67 @@ const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddElement }) => {
   const handleImageGenerate = async () => {
     if (!imgPrompt.trim()) return;
     if (!getStoredApiKey()) {
-      alert('Please add your Gemini API key in Settings to use Image Generation.');
+      setErrorModal({ isOpen: true, title: 'API Key Required', message: 'Please add your Gemini API key in Settings to use Image Generation.' });
+      if (onOpenSettings) onOpenSettings();
       return;
     }
     setIsGenerating(true);
-    const base64 = await generateImage(imgPrompt);
-    if (base64) {
-      onAddElement(ElementType.IMAGE, { src: base64, name: 'Nano Banana Image' });
+    try {
+      const base64 = await generateImage(imgPrompt);
+      if (base64) {
+        // Convert base64 to blob for storage
+        const response = await fetch(base64);
+        const blob = await response.blob();
+
+        // Generate unique name based on prompt
+        const timestamp = Date.now();
+        const shortPrompt = imgPrompt.slice(0, 20).replace(/[^a-zA-Z0-9]/g, '_');
+        const imageName = `AI_${shortPrompt}_${timestamp}`;
+
+        // Save to library
+        await saveAsset(blob, ElementType.IMAGE, imageName);
+
+        // Refresh library to show new asset
+        await refreshLibrary();
+
+        // Also add to canvas
+        onAddElement(ElementType.IMAGE, { src: base64, name: imageName });
+
+        // Clear prompt after success
+        setImgPrompt('');
+      }
+    } catch (error: any) {
+      console.error('Image generation error:', error);
+
+      // Check for rate limit error
+      if (error?.message?.startsWith('RATE_LIMIT:')) {
+        const retryTime = error.message.split(':')[1] || '60';
+        setErrorModal({
+          isOpen: true,
+          title: 'API Rate Limit Reached',
+          message: `You've exceeded the Gemini API quota for image generation. The free tier may have limited or no access to this model.\n\n• Try again in ${retryTime} seconds\n• Consider upgrading your API plan at ai.google.dev\n• Or use the Import button to add your own images`
+        });
+      } else {
+        setErrorModal({ isOpen: true, title: 'Generation Failed', message: 'Failed to generate image. Please try again or check your API quota.' });
+      }
     }
     setIsGenerating(false);
   };
 
   return (
-    <div className="w-[320px] bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col h-full transition-colors relative">
+    <div className="bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col h-full transition-colors relative" style={{ width: panelWidth ? `${panelWidth}px` : '280px' }}>
 
       {/* Recording Overlay */}
       {isRecording && (
         <div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4">
-          <div className="text-white mb-4 text-xl font-mono animate-pulse">
-            REC {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}
+          <div className="flex items-center gap-2 text-white mb-2">
+            <div className={`w-3 h-3 rounded-full animate-pulse ${recordingMode === 'screen' ? 'bg-purple-500' : 'bg-red-500'}`}></div>
+            <span className="text-xs font-semibold uppercase">
+              {recordingType === ElementType.AUDIO ? 'Audio' : recordingMode === 'screen' ? 'Screen' : 'Camera'}
+            </span>
+          </div>
+          <div className="text-white mb-4 text-xl font-mono">
+            {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}
           </div>
           {recordingType === ElementType.VIDEO && (
             <video ref={videoPreviewRef} className="w-full aspect-video bg-black border border-gray-700 rounded mb-4" muted />
@@ -176,6 +312,7 @@ const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddElement }) => {
           >
             <SquareIcon className="w-6 h-6 fill-current" />
           </button>
+          <p className="text-gray-400 text-xs mt-3">Click to stop recording</p>
         </div>
       )}
 
@@ -189,20 +326,38 @@ const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddElement }) => {
 
         {activeTab === 'library' && (
           <>
-            {/* Actions */}
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => startRecording(ElementType.VIDEO)} className="flex flex-col items-center justify-center p-3 bg-gray-100 dark:bg-gray-800 rounded hover:bg-red-50 dark:hover:bg-red-900/20 group border border-transparent hover:border-red-500/30 transition">
-                <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center mb-1 group-hover:scale-110 transition">
-                  <div className="w-3 h-3 bg-red-600 rounded-full"></div>
-                </div>
-                <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300">Rec Video</span>
-              </button>
-              <button onClick={() => startRecording(ElementType.AUDIO)} className="flex flex-col items-center justify-center p-3 bg-gray-100 dark:bg-gray-800 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 group border border-transparent hover:border-blue-500/30 transition">
-                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center mb-1 group-hover:scale-110 transition">
-                  <MusicIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300">Rec Audio</span>
-              </button>
+            {/* Recording Actions */}
+            <div className="space-y-2">
+              <h3 className="text-[10px] text-gray-500 dark:text-gray-500 uppercase font-bold">Record</h3>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => startRecording(ElementType.VIDEO, 'camera')}
+                  className="flex flex-col items-center justify-center p-3 bg-gray-100 dark:bg-gray-800 rounded hover:bg-red-50 dark:hover:bg-red-900/20 group border border-transparent hover:border-red-500/30 transition"
+                >
+                  <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center mb-1 group-hover:scale-110 transition">
+                    <CameraIcon className="w-4 h-4 text-red-600 dark:text-red-400" />
+                  </div>
+                  <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300">Camera</span>
+                </button>
+                <button
+                  onClick={() => startRecording(ElementType.VIDEO, 'screen')}
+                  className="flex flex-col items-center justify-center p-3 bg-gray-100 dark:bg-gray-800 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 group border border-transparent hover:border-purple-500/30 transition"
+                >
+                  <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center mb-1 group-hover:scale-110 transition">
+                    <MonitorIcon className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300">Screen</span>
+                </button>
+                <button
+                  onClick={() => startRecording(ElementType.AUDIO, 'camera')}
+                  className="flex flex-col items-center justify-center p-3 bg-gray-100 dark:bg-gray-800 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 group border border-transparent hover:border-blue-500/30 transition"
+                >
+                  <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center mb-1 group-hover:scale-110 transition">
+                    <MusicIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-300">Audio</span>
+                </button>
+              </div>
             </div>
 
             <div className="border-t border-gray-200 dark:border-gray-800 pt-4">
@@ -239,9 +394,10 @@ const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddElement }) => {
                     </div>
                     <button
                       onClick={(e) => handleDeleteAsset(asset.id, e)}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900 rounded text-red-500 transition"
+                      className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-100 dark:hover:bg-red-900/50 rounded text-red-500 transition"
+                      title="Delete from library"
                     >
-                      <SquareIcon className="w-3 h-3" />
+                      <TrashIcon className="w-4 h-4" />
                     </button>
                   </div>
                 ))}
@@ -281,21 +437,68 @@ const AssetsPanel: React.FC<AssetsPanelProps> = ({ onAddElement }) => {
 
         {activeTab === 'image' && (
           <div className="space-y-4">
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900 dark:to-purple-900 p-4 rounded-xl border border-indigo-200 dark:border-indigo-700 transition-colors">
-              <h3 className="text-xs text-indigo-700 dark:text-indigo-200 font-bold mb-2 flex items-center"><SparklesIcon className="w-3 h-3 mr-1" /> Nano Banana (Image)</h3>
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/50 dark:to-purple-900/50 p-4 rounded-xl border border-indigo-200 dark:border-indigo-700 transition-colors">
+              <h3 className="text-xs text-indigo-700 dark:text-indigo-200 font-bold mb-2 flex items-center"><SparklesIcon className="w-3 h-3 mr-1" /> AI Image Generation</h3>
               <textarea
                 className="w-full bg-white/80 dark:bg-black/30 border border-indigo-200 dark:border-indigo-500/30 rounded p-2 text-xs text-gray-900 dark:text-white mb-3 focus:outline-none resize-none"
                 rows={3} placeholder="A cyberpunk dog eating noodles..."
                 value={imgPrompt} onChange={(e) => setImgPrompt(e.target.value)}
+                disabled={isGenerating}
               />
-              <button onClick={handleImageGenerate} disabled={isGenerating} className="w-full py-2 bg-indigo-500 hover:bg-indigo-400 rounded text-xs font-bold text-white transition disabled:opacity-50 shadow-md">
-                {isGenerating ? 'Generating...' : 'Generate Image'}
+              <button onClick={handleImageGenerate} disabled={isGenerating || !imgPrompt.trim()} className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-400 rounded text-xs font-bold text-white transition disabled:opacity-50 shadow-md flex items-center justify-center">
+                {isGenerating ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Generating...
+                  </>
+                ) : 'Generate Image'}
               </button>
+
+              {/* Loading indicator */}
+              {isGenerating && (
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-center text-xs text-indigo-600 dark:text-indigo-300">
+                    <SparklesIcon className="w-3 h-3 mr-1 animate-pulse" />
+                    Creating your image with AI...
+                  </div>
+                  <div className="w-full h-1.5 bg-indigo-200 dark:bg-indigo-900 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 rounded-full animate-[shimmer_1.5s_ease-in-out_infinite]" style={{ width: '100%', backgroundSize: '200% 100%' }}></div>
+                  </div>
+                  <p className="text-[10px] text-center text-gray-500 dark:text-gray-400">Image will be saved to your library</p>
+                </div>
+              )}
             </div>
           </div>
         )}
 
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        onClose={() => setDeleteConfirm({ isOpen: false, assetId: null })}
+        onConfirm={confirmDeleteAsset}
+        title="Delete Asset"
+        message="Are you sure you want to remove this asset from your library? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+      />
+
+      {/* Error Modal */}
+      <ConfirmDialog
+        isOpen={errorModal.isOpen}
+        onClose={() => setErrorModal({ isOpen: false, title: '', message: '' })}
+        onConfirm={() => { }}
+        title={errorModal.title}
+        message={errorModal.message}
+        confirmText="OK"
+        cancelText=""
+        variant="warning"
+      />
     </div>
   );
 };

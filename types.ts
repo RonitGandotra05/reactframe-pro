@@ -41,6 +41,7 @@ export interface EditorElement {
   width: number; // percentage
   height: number; // percentage
   rotation: number;
+  zIndex: number; // Layer stacking order
 
   props: ElementProps;
 

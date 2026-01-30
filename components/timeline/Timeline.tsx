@@ -319,7 +319,7 @@ const Timeline: React.FC<TimelineProps> = ({
         </div>
       </div>
 
-      <div className="flex-grow relative overflow-x-auto overflow-y-hidden custom-scrollbar">
+      <div className="flex-grow relative overflow-x-auto overflow-y-auto custom-scrollbar">
         <div className="relative min-w-full" style={{ width: `${totalWidth + 96}px` }}>
 
           {/* Ruler */}
@@ -336,17 +336,16 @@ const Timeline: React.FC<TimelineProps> = ({
           <div className="relative">
             {/* Playhead */}
             <div
-              className="absolute top-0 bottom-0 w-px bg-red-500 z-30 pointer-events-none"
-              style={{ left: `${(currentTime * pixelsPerSecond) + 96}px`, height: '1000px' }}
+              className="absolute top-0 w-px bg-red-500 z-30 pointer-events-none"
+              style={{ left: `${(currentTime * pixelsPerSecond) + 96}px`, height: `${tracks.length * 48}px` }}
             >
               <div className="w-3 h-3 bg-red-500 transform -translate-x-1/2 -translate-y-1/2 rotate-45 absolute top-0"></div>
             </div>
 
-            {/* Snap Indicator Line */}
             {snapIndicator && (
               <div
-                className="absolute top-0 bottom-0 w-0.5 bg-green-500 z-40 pointer-events-none animate-pulse"
-                style={{ left: `${(snapIndicator.time * pixelsPerSecond) + 96}px`, height: '1000px' }}
+                className="absolute top-0 w-0.5 bg-green-500 z-40 pointer-events-none animate-pulse"
+                style={{ left: `${(snapIndicator.time * pixelsPerSecond) + 96}px`, height: `${tracks.length * 48}px` }}
               >
                 <div className="w-2 h-2 bg-green-500 rounded-full transform -translate-x-1/2 absolute top-0"></div>
               </div>

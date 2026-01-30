@@ -14,7 +14,7 @@ interface VideoPreviewProps {
 }
 
 export interface VideoPreviewHandle {
-    captureStream: (fps: number) => MediaStream;
+  captureStream: (fps: number) => MediaStream;
 }
 
 const VideoPreview = forwardRef<VideoPreviewHandle, VideoPreviewProps>(({
@@ -28,7 +28,7 @@ const VideoPreview = forwardRef<VideoPreviewHandle, VideoPreviewProps>(({
   togglePlay
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   // Dragging State
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -36,45 +36,45 @@ const VideoPreview = forwardRef<VideoPreviewHandle, VideoPreviewProps>(({
   // Resizing State
   const [isResizing, setIsResizing] = useState(false);
   const [resizeHandle, setResizeHandle] = useState<string | null>(null);
-  const [initialElementState, setInitialElementState] = useState<{x: number, y: number, w: number, h: number, r: number} | null>(null);
+  const [initialElementState, setInitialElementState] = useState<{ x: number, y: number, w: number, h: number, r: number } | null>(null);
   const [startMousePos, setStartMousePos] = useState({ x: 0, y: 0 });
 
   useImperativeHandle(ref, () => ({
-      captureStream: (fps: number) => {
-          if (containerRef.current) {
-              const videoEl = document.querySelector('video') as HTMLVideoElement;
-              if (videoEl && (videoEl as any).captureStream) {
-                  return (videoEl as any).captureStream(fps);
-              }
-          }
-          throw new Error("Export unavailable in this environment");
+    captureStream: (fps: number) => {
+      if (containerRef.current) {
+        const videoEl = document.querySelector('video') as HTMLVideoElement;
+        if (videoEl && (videoEl as any).captureStream) {
+          return (videoEl as any).captureStream(fps);
+        }
       }
+      throw new Error("Export unavailable in this environment");
+    }
   }));
 
   // -- Audio / Video Sync Logic --
   useEffect(() => {
     const mediaElements = document.querySelectorAll('video, audio');
     mediaElements.forEach((el: any) => {
-        const id = el.dataset.elementId;
-        const element = elements.find(e => e.id === id);
-        
-        if (element) {
-            if (currentTime >= element.startTime && currentTime <= element.startTime + element.duration) {
-                const targetTime = (currentTime - element.startTime) + element.mediaOffset;
-                if (Math.abs(el.currentTime - targetTime) > 0.3) {
-                    el.currentTime = targetTime;
-                }
-                if (isPlaying && el.paused) {
-                    el.play().catch(() => {});
-                } else if (!isPlaying && !el.paused) {
-                    el.pause();
-                }
-                el.volume = element.props.volume ?? 1;
-                el.muted = element.props.isMuted ?? false;
-            } else {
-                if (!el.paused) el.pause();
-            }
+      const id = el.dataset.elementId;
+      const element = elements.find(e => e.id === id);
+
+      if (element) {
+        if (currentTime >= element.startTime && currentTime <= element.startTime + element.duration) {
+          const targetTime = (currentTime - element.startTime) + element.mediaOffset;
+          if (Math.abs(el.currentTime - targetTime) > 0.3) {
+            el.currentTime = targetTime;
+          }
+          if (isPlaying && el.paused) {
+            el.play().catch(() => { });
+          } else if (!isPlaying && !el.paused) {
+            el.pause();
+          }
+          el.volume = element.props.volume ?? 1;
+          el.muted = element.props.isMuted ?? false;
+        } else {
+          if (!el.paused) el.pause();
         }
+      }
     });
   }, [currentTime, isPlaying, elements]);
 
@@ -89,27 +89,27 @@ const VideoPreview = forwardRef<VideoPreviewHandle, VideoPreviewProps>(({
       y: e.clientY
     });
     setInitialElementState({
-        x: element.x,
-        y: element.y,
-        w: element.width,
-        h: element.height,
-        r: element.rotation
+      x: element.x,
+      y: element.y,
+      w: element.width,
+      h: element.height,
+      r: element.rotation
     });
   };
 
   const handleResizeMouseDown = (e: React.MouseEvent, handle: string, element: EditorElement) => {
-      e.stopPropagation();
-      e.preventDefault();
-      setIsResizing(true);
-      setResizeHandle(handle);
-      setStartMousePos({ x: e.clientX, y: e.clientY });
-      setInitialElementState({
-          x: element.x,
-          y: element.y,
-          w: element.width,
-          h: element.height,
-          r: element.rotation
-      });
+    e.stopPropagation();
+    e.preventDefault();
+    setIsResizing(true);
+    setResizeHandle(handle);
+    setStartMousePos({ x: e.clientX, y: e.clientY });
+    setInitialElementState({
+      x: element.x,
+      y: element.y,
+      w: element.width,
+      h: element.height,
+      r: element.rotation
+    });
   };
 
   useEffect(() => {
@@ -121,13 +121,13 @@ const VideoPreview = forwardRef<VideoPreviewHandle, VideoPreviewProps>(({
         // Drag Logic
         const deltaX = e.clientX - dragOffset.x;
         const deltaY = e.clientY - dragOffset.y;
-        
+
         const deltaXPercent = (deltaX / rect.width) * 100;
         const deltaYPercent = (deltaY / rect.height) * 100;
 
-        onUpdateElement(selectedElementId, { 
-            x: initialElementState.x + deltaXPercent, 
-            y: initialElementState.y + deltaYPercent 
+        onUpdateElement(selectedElementId, {
+          x: initialElementState.x + deltaXPercent,
+          y: initialElementState.y + deltaYPercent
         });
 
       } else if (isResizing && resizeHandle) {
@@ -139,7 +139,7 @@ const VideoPreview = forwardRef<VideoPreviewHandle, VideoPreviewProps>(({
         const rad = (initialElementState.r * Math.PI) / 180;
         const cos = Math.cos(rad);
         const sin = Math.sin(rad);
-        
+
         // Project screen delta onto element axes
         const localDeltaX = (deltaX * cos) + (deltaY * sin);
         const localDeltaY = (deltaY * cos) - (deltaX * sin);
@@ -155,39 +155,39 @@ const VideoPreview = forwardRef<VideoPreviewHandle, VideoPreviewProps>(({
 
         // Apply resizing
         const applyXChange = (amount: number, isLeft: boolean) => {
-             if (isLeft) {
-                 const half = amount / 2;
-                 const dx = -(half * rect.width / 100) * cos;
-                 const dy = -(half * rect.width / 100) * sin;
-                 newX += (dx / rect.width) * 100;
-                 newY += (dy / rect.height) * 100;
-                 newW -= amount;
-             } else {
-                 const half = amount / 2;
-                 const dx = (half * rect.width / 100) * cos;
-                 const dy = (half * rect.width / 100) * sin;
-                 newX += (dx / rect.width) * 100;
-                 newY += (dy / rect.height) * 100;
-                 newW += amount;
-             }
+          if (isLeft) {
+            const half = amount / 2;
+            const dx = -(half * rect.width / 100) * cos;
+            const dy = -(half * rect.width / 100) * sin;
+            newX += (dx / rect.width) * 100;
+            newY += (dy / rect.height) * 100;
+            newW -= amount;
+          } else {
+            const half = amount / 2;
+            const dx = (half * rect.width / 100) * cos;
+            const dy = (half * rect.width / 100) * sin;
+            newX += (dx / rect.width) * 100;
+            newY += (dy / rect.height) * 100;
+            newW += amount;
+          }
         };
 
         const applyYChange = (amount: number, isTop: boolean) => {
-             if (isTop) {
-                 const half = amount / 2;
-                 const dx = (half * rect.height / 100) * sin; 
-                 const dy = -(half * rect.height / 100) * cos;
-                 newX += (dx / rect.width) * 100;
-                 newY += (dy / rect.height) * 100;
-                 newH -= amount;
-             } else {
-                 const half = amount / 2;
-                 const dx = -(half * rect.height / 100) * sin;
-                 const dy = (half * rect.height / 100) * cos;
-                 newX += (dx / rect.width) * 100;
-                 newY += (dy / rect.height) * 100;
-                 newH += amount;
-             }
+          if (isTop) {
+            const half = amount / 2;
+            const dx = (half * rect.height / 100) * sin;
+            const dy = -(half * rect.height / 100) * cos;
+            newX += (dx / rect.width) * 100;
+            newY += (dy / rect.height) * 100;
+            newH -= amount;
+          } else {
+            const half = amount / 2;
+            const dx = -(half * rect.height / 100) * sin;
+            const dy = (half * rect.height / 100) * cos;
+            newX += (dx / rect.width) * 100;
+            newY += (dy / rect.height) * 100;
+            newH += amount;
+          }
         };
 
         if (resizeHandle.includes('e')) applyXChange(ldXPercent, false);
@@ -196,18 +196,18 @@ const VideoPreview = forwardRef<VideoPreviewHandle, VideoPreviewProps>(({
         if (resizeHandle.includes('n')) applyYChange(ldYPercent, true);
 
         onUpdateElement(selectedElementId, {
-            x: newX,
-            y: newY,
-            width: Math.max(1, newW),
-            height: Math.max(1, newH)
+          x: newX,
+          y: newY,
+          width: Math.max(1, newW),
+          height: Math.max(1, newH)
         });
       }
     };
     const handleMouseUp = () => {
-        setIsDragging(false);
-        setIsResizing(false);
-        setResizeHandle(null);
-        setInitialElementState(null);
+      setIsDragging(false);
+      setIsResizing(false);
+      setResizeHandle(null);
+      setInitialElementState(null);
     };
 
     if (isDragging || isResizing) {
@@ -233,9 +233,9 @@ const VideoPreview = forwardRef<VideoPreviewHandle, VideoPreviewProps>(({
       top: `${el.y}%`,
       width: `${el.width}%`,
       height: `${el.height}%`,
-      transform: `rotate(${el.rotation}deg)`, 
+      transform: `rotate(${el.rotation}deg)`,
       cursor: isSelected ? 'move' : 'default',
-      zIndex: 10 + el.trackId,
+      zIndex: 10 + (el.zIndex ?? 0),
       border: isSelected ? '2px solid #3b82f6' : 'none',
       display: 'flex',
       alignItems: 'center',
@@ -244,78 +244,78 @@ const VideoPreview = forwardRef<VideoPreviewHandle, VideoPreviewProps>(({
     };
 
     const contentStyle: React.CSSProperties = {
-        backgroundColor: el.props.backgroundColor,
-        color: el.props.color || 'white',
-        borderRadius: el.props.borderRadius ? `${el.props.borderRadius}px` : '0',
-        fontSize: el.props.fontSize ? `${el.props.fontSize}px` : '16px',
-        opacity: el.props.opacity ?? 1,
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        overflow: 'hidden',
-        border: el.props.borderWidth ? `${el.props.borderWidth}px solid ${el.props.borderColor || 'black'}` : 'none',
-        pointerEvents: 'none', 
+      backgroundColor: el.props.backgroundColor,
+      color: el.props.color || 'white',
+      borderRadius: el.props.borderRadius ? `${el.props.borderRadius}px` : '0',
+      fontSize: el.props.fontSize ? `${el.props.fontSize}px` : '16px',
+      opacity: el.props.opacity ?? 1,
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+      border: el.props.borderWidth ? `${el.props.borderWidth}px solid ${el.props.borderColor || 'black'}` : 'none',
+      pointerEvents: 'none',
     };
-    
+
     // AI Generated Custom HTML
     // We scope CSS by replacing .root with a unique ID class
-    const scopedCss = el.type === ElementType.AI_GENERATED && el.props.customCss 
-        ? el.props.customCss.replace(/\.root/g, `.gen-${el.id}`) 
-        : '';
-    
+    const scopedCss = el.type === ElementType.AI_GENERATED && el.props.customCss
+      ? el.props.customCss.replace(/\.root/g, `.gen-${el.id}`)
+      : '';
+
     // Render Resize Handles
     const renderHandles = () => {
-        if (!isSelected) return null;
-        const hStyle = "absolute w-3 h-3 bg-white border border-blue-500 rounded-full z-20 pointer-events-auto hover:bg-blue-100 hover:scale-125 transition-transform";
-        return (
-            <>
-                <div className={`${hStyle} -top-1.5 -left-1.5 cursor-nw-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 'nw', el)} />
-                <div className={`${hStyle} -top-1.5 left-1/2 -translate-x-1/2 cursor-n-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 'n', el)} />
-                <div className={`${hStyle} -top-1.5 -right-1.5 cursor-ne-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 'ne', el)} />
-                <div className={`${hStyle} top-1/2 -translate-y-1/2 -right-1.5 cursor-e-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 'e', el)} />
-                <div className={`${hStyle} -bottom-1.5 -right-1.5 cursor-se-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 'se', el)} />
-                <div className={`${hStyle} -bottom-1.5 left-1/2 -translate-x-1/2 cursor-s-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 's', el)} />
-                <div className={`${hStyle} -bottom-1.5 -left-1.5 cursor-sw-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 'sw', el)} />
-                <div className={`${hStyle} top-1/2 -translate-y-1/2 -left-1.5 cursor-w-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 'w', el)} />
-            </>
-        );
+      if (!isSelected) return null;
+      const hStyle = "absolute w-3 h-3 bg-white border border-blue-500 rounded-full z-20 pointer-events-auto hover:bg-blue-100 hover:scale-125 transition-transform";
+      return (
+        <>
+          <div className={`${hStyle} -top-1.5 -left-1.5 cursor-nw-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 'nw', el)} />
+          <div className={`${hStyle} -top-1.5 left-1/2 -translate-x-1/2 cursor-n-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 'n', el)} />
+          <div className={`${hStyle} -top-1.5 -right-1.5 cursor-ne-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 'ne', el)} />
+          <div className={`${hStyle} top-1/2 -translate-y-1/2 -right-1.5 cursor-e-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 'e', el)} />
+          <div className={`${hStyle} -bottom-1.5 -right-1.5 cursor-se-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 'se', el)} />
+          <div className={`${hStyle} -bottom-1.5 left-1/2 -translate-x-1/2 cursor-s-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 's', el)} />
+          <div className={`${hStyle} -bottom-1.5 -left-1.5 cursor-sw-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 'sw', el)} />
+          <div className={`${hStyle} top-1/2 -translate-y-1/2 -left-1.5 cursor-w-resize`} onMouseDown={(e) => handleResizeMouseDown(e, 'w', el)} />
+        </>
+      );
     }
 
     return (
       <div key={el.id} style={style} onMouseDown={(e) => handleElementMouseDown(e, el)}>
-        
+
         {el.type === ElementType.VIDEO && el.props.src && (
-             <video 
-                data-element-id={el.id}
-                src={el.props.src} 
-                className="w-full h-full object-cover pointer-events-none" 
-                style={{ borderRadius: contentStyle.borderRadius }}
-             />
+          <video
+            data-element-id={el.id}
+            src={el.props.src}
+            className="w-full h-full object-cover pointer-events-none"
+            style={{ borderRadius: contentStyle.borderRadius }}
+          />
         )}
 
         {el.type === ElementType.IMAGE && el.props.src && (
-            <img src={el.props.src} className="w-full h-full object-cover pointer-events-none" style={{borderRadius: contentStyle.borderRadius}} />
+          <img src={el.props.src} className="w-full h-full object-cover pointer-events-none" style={{ borderRadius: contentStyle.borderRadius }} />
         )}
 
         {(el.type === ElementType.TEXT || el.type === ElementType.SHAPE) && (
-            <div style={contentStyle} className="p-2 whitespace-pre-wrap text-center">
-                {el.props.text}
-            </div>
+          <div style={contentStyle} className="p-2 whitespace-pre-wrap text-center">
+            {el.props.text}
+          </div>
         )}
 
         {/* Custom AI Component Rendering */}
         {el.type === ElementType.AI_GENERATED && (
-             <div className={`w-full h-full gen-${el.id} relative pointer-events-none`}>
-                 {scopedCss && <style>{scopedCss}</style>}
-                 {/* Dangerously Set HTML - in production would need sanitization */}
-                 {el.props.html ? (
-                     <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: el.props.html }} />
-                 ) : (
-                     <div style={contentStyle} className="p-2 text-center text-xs">AI Generating...</div>
-                 )}
-             </div>
+          <div className={`w-full h-full gen-${el.id} relative pointer-events-none`}>
+            {scopedCss && <style>{scopedCss}</style>}
+            {/* Dangerously Set HTML - in production would need sanitization */}
+            {el.props.html ? (
+              <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: el.props.html }} />
+            ) : (
+              <div style={contentStyle} className="p-2 text-center text-xs">AI Generating...</div>
+            )}
+          </div>
         )}
 
         {renderHandles()}
@@ -325,34 +325,35 @@ const VideoPreview = forwardRef<VideoPreviewHandle, VideoPreviewProps>(({
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center bg-gray-100 dark:bg-black relative overflow-hidden transition-colors">
-      
-      <div 
+
+      <div
         ref={containerRef}
         className="relative shadow-2xl bg-white dark:bg-gray-900 overflow-hidden transition-colors group"
         style={{ width: '80%', aspectRatio: '16/9' }}
         onClick={() => onSelectElement(null)}
       >
         {elements.filter(e => e.type === ElementType.AUDIO && e.props.src).map(el => (
-            <audio key={el.id} data-element-id={el.id} src={el.props.src} />
+          <audio key={el.id} data-element-id={el.id} src={el.props.src} />
         ))}
 
-        {elements.map(renderVisualElement)}
+        {/* Sort by zIndex for proper layering */}
+        {[...elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)).map(renderVisualElement)}
       </div>
 
       {/* Transport Controls */}
       <div className="absolute bottom-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-full px-6 py-3 flex items-center space-x-6 z-50 shadow-lg border border-gray-200 dark:border-gray-700 transition-colors">
         <button className="text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white transition" onClick={() => onTimeUpdate(0)}>
-            <span className="text-xs font-mono">|&lt;</span>
+          <span className="text-xs font-mono">|&lt;</span>
         </button>
-        <button 
+        <button
           onClick={togglePlay}
           className="w-10 h-10 bg-gray-900 dark:bg-white rounded-full flex items-center justify-center text-white dark:text-black hover:bg-gray-700 dark:hover:bg-gray-200 transition"
         >
           {isPlaying ? <PauseIcon /> : <PlayIcon className="ml-1" />}
         </button>
-         <div className="text-xs font-mono text-gray-700 dark:text-gray-300">
-            {Math.floor(currentTime / 60)}:{Math.floor(currentTime % 60).toString().padStart(2, '0')}
-         </div>
+        <div className="text-xs font-mono text-gray-700 dark:text-gray-300">
+          {Math.floor(currentTime / 60)}:{Math.floor(currentTime % 60).toString().padStart(2, '0')}
+        </div>
       </div>
     </div>
   );

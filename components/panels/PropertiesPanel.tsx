@@ -6,12 +6,13 @@ interface PropertiesPanelProps {
     onUpdate: (id: string, updates: Partial<EditorElement>) => void;
     onDelete: (id: string) => void;
     onSplitAudio?: (id: string) => void;
+    panelWidth?: number;
 }
 
-const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ element, onUpdate, onDelete, onSplitAudio }) => {
+const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ element, onUpdate, onDelete, onSplitAudio, panelWidth }) => {
     if (!element) {
         return (
-            <div className="w-[300px] bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 p-4 text-gray-500 text-sm flex flex-col items-center justify-center h-full transition-colors">
+            <div className="bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 p-4 text-gray-500 text-sm flex flex-col items-center justify-center h-full transition-colors" style={{ width: panelWidth ? `${panelWidth}px` : '300px' }}>
                 <span>No element selected</span>
             </div>
         );
@@ -28,7 +29,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ element, onUpdate, on
     const isMedia = element.type === ElementType.VIDEO || element.type === ElementType.AUDIO;
 
     return (
-        <div className="w-[300px] bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 flex flex-col h-full overflow-y-auto transition-colors">
+        <div className="bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 flex flex-col h-full overflow-y-auto transition-colors" style={{ width: panelWidth ? `${panelWidth}px` : '300px' }}>
             <div className="h-12 border-b border-gray-200 dark:border-gray-800 flex items-center px-4 font-semibold text-sm text-gray-700 dark:text-gray-200">
                 Properties
             </div>
@@ -44,6 +45,34 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ element, onUpdate, on
                         className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors"
                     />
                 </div>
+
+                {/* Layer Order Controls */}
+                {element.type !== ElementType.AUDIO && (
+                    <div className="space-y-2 pt-4 border-t border-gray-200 dark:border-gray-800">
+                        <label className="text-xs text-gray-500 uppercase font-bold">Layer Order</label>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => onUpdate(element.id, { zIndex: (element.zIndex ?? 0) + 1 })}
+                                className="flex-1 flex items-center justify-center gap-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-blue-100 dark:hover:bg-blue-900/30 border border-gray-200 dark:border-gray-700 rounded text-sm text-gray-700 dark:text-gray-300 transition"
+                            >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                </svg>
+                                <span>Bring Up</span>
+                            </button>
+                            <button
+                                onClick={() => onUpdate(element.id, { zIndex: Math.max(0, (element.zIndex ?? 0) - 1) })}
+                                className="flex-1 flex items-center justify-center gap-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-blue-100 dark:hover:bg-blue-900/30 border border-gray-200 dark:border-gray-700 rounded text-sm text-gray-700 dark:text-gray-300 transition"
+                            >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                                <span>Send Down</span>
+                            </button>
+                        </div>
+                        <p className="text-[10px] text-gray-400">Current layer: {element.zIndex ?? 0}</p>
+                    </div>
+                )}
 
                 {/* Media Controls (Video/Audio) */}
                 {isMedia && (
@@ -128,11 +157,21 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ element, onUpdate, on
                             <div className="grid grid-cols-2 gap-2">
                                 <div>
                                     <span className="text-xs text-gray-500 dark:text-gray-400">Text Color</span>
-                                    <input type="color" value={element.props.color || '#ffffff'} onChange={(e) => handleChange('color', e.target.value)} className="w-full h-8 bg-transparent cursor-pointer" />
+                                    <input
+                                        type="color"
+                                        value={element.props.color?.startsWith('#') ? element.props.color : '#ffffff'}
+                                        onChange={(e) => handleChange('color', e.target.value)}
+                                        className="w-full h-8 bg-transparent cursor-pointer"
+                                    />
                                 </div>
                                 <div>
                                     <span className="text-xs text-gray-500 dark:text-gray-400">Bg Color</span>
-                                    <input type="color" value={element.props.backgroundColor || '#000000'} onChange={(e) => handleChange('backgroundColor', e.target.value)} className="w-full h-8 bg-transparent cursor-pointer" />
+                                    <input
+                                        type="color"
+                                        value={element.props.backgroundColor?.startsWith('#') ? element.props.backgroundColor : '#000000'}
+                                        onChange={(e) => handleChange('backgroundColor', e.target.value)}
+                                        className="w-full h-8 bg-transparent cursor-pointer"
+                                    />
                                 </div>
                             </div>
                         )}

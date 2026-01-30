@@ -1,5 +1,5 @@
 import React from 'react';
-import { EditorElement, Track } from '../../types';
+import { EditorElement, Track, ElementType } from '../../types';
 
 interface TimelineTrackProps {
   track: Track;
@@ -82,14 +82,19 @@ const TimelineTrack: React.FC<TimelineTrackProps> = ({
 
               {isSelected && (
                 <>
-                  <div
-                    className="absolute left-0 top-0 bottom-0 w-2 bg-white/30 hover:bg-white/50 cursor-ew-resize"
-                    onMouseDown={(e) => onElementInteraction(e, 'RESIZE_L', el.id, el.trackId, el.startTime, el.duration, el.mediaOffset)}
-                  ></div>
-                  <div
-                    className="absolute right-0 top-0 bottom-0 w-2 bg-white/30 hover:bg-white/50 cursor-ew-resize"
-                    onMouseDown={(e) => onElementInteraction(e, 'RESIZE_R', el.id, el.trackId, el.startTime, el.duration, el.mediaOffset)}
-                  ></div>
+                  {/* Only show resize handles for stretchable elements (not video/audio) */}
+                  {el.type !== ElementType.VIDEO && el.type !== ElementType.AUDIO && (
+                    <>
+                      <div
+                        className="absolute left-0 top-0 bottom-0 w-2 bg-white/30 hover:bg-white/50 cursor-ew-resize"
+                        onMouseDown={(e) => onElementInteraction(e, 'RESIZE_L', el.id, el.trackId, el.startTime, el.duration, el.mediaOffset)}
+                      ></div>
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-2 bg-white/30 hover:bg-white/50 cursor-ew-resize"
+                        onMouseDown={(e) => onElementInteraction(e, 'RESIZE_R', el.id, el.trackId, el.startTime, el.duration, el.mediaOffset)}
+                      ></div>
+                    </>
+                  )}
                 </>
               )}
             </div>

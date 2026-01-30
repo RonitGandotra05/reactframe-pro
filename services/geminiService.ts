@@ -71,13 +71,13 @@ export const generateComponentConfig = async (prompt: string): Promise<Generated
       const result = JSON.parse(response.text);
       // Map the flat result to our structure
       return {
-          type: ElementType.AI_GENERATED,
-          name: result.name,
-          props: {
-              html: result.html,
-              customCss: result.css,
-              backgroundColor: 'transparent' // Default to transparent so the component controls bg
-          }
+        type: ElementType.AI_GENERATED,
+        name: result.name,
+        props: {
+          html: result.html,
+          customCss: result.css,
+          backgroundColor: 'transparent' // Default to transparent so the component controls bg
+        }
       };
     }
     return null;
@@ -88,29 +88,39 @@ export const generateComponentConfig = async (prompt: string): Promise<Generated
   }
 };
 
-// Image Generation (Nano Banana)
+// Image Generation using Gemini 2.5 Flash Image
 export const generateImage = async (prompt: string): Promise<string | null> => {
-    const apiKey = getStoredApiKey();
-    if (!apiKey) return null;
-    const ai = new GoogleGenAI({ apiKey });
+  const apiKey = getStoredApiKey();
+  if (!apiKey) return null;
+  const ai = new GoogleGenAI({ apiKey });
 
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: { parts: [{ text: prompt }] },
-            config: {
-                imageConfig: { aspectRatio: "16:9" }
-            }
-        });
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-preview-04-17',
+      contents: prompt,
+      config: {
+        responseModalities: ['TEXT', 'IMAGE'],
+      }
+    });
 
-        for (const part of response.candidates?.[0]?.content?.parts || []) {
-             if (part.inlineData) {
-                 return `data:image/png;base64,${part.inlineData.data}`;
-             }
-        }
-        return null;
-    } catch (e) {
-        console.error("Image Gen Error", e);
-        return null;
+    // Check for inline image data in the response
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:image/png;base64,${part.inlineData.data}`;
+      }
     }
+    return null;
+  } catch (e: any) {
+    console.error("Image Gen Error", e);
+
+    // Check for rate limit error
+    if (e?.message?.includes('429') || e?.message?.includes('RESOURCE_EXHAUSTED') || e?.message?.includes('quota')) {
+      // Extract retry time if available
+      const retryMatch = e.message?.match(/retry in (\d+\.?\d*)s/i);
+      const retryTime = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60;
+      throw new Error(`RATE_LIMIT:${retryTime}`);
+    }
+
+    throw e;
+  }
 };
