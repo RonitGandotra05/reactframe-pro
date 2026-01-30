@@ -16,9 +16,14 @@ interface TimelineProps {
   pixelsPerSecond: number;
   setPixelsPerSecond: (pps: number) => void;
   onAddAsset?: (assetId: string, trackId: number, startTime: number) => void;
+  onInsertTrack?: (afterTrackId: number) => void;
+  onDeleteTrack?: (trackId: number) => void;
 }
 
 type DragMode = 'MOVE' | 'RESIZE_L' | 'RESIZE_R';
+
+// Magnetic snap threshold in pixels
+const SNAP_THRESHOLD_PX = 10;
 
 const Timeline: React.FC<TimelineProps> = ({
   tracks,
@@ -32,24 +37,62 @@ const Timeline: React.FC<TimelineProps> = ({
   onSplit,
   pixelsPerSecond,
   setPixelsPerSecond,
-  onAddAsset
+  onAddAsset,
+  onInsertTrack,
+  onDeleteTrack
 }) => {
   const rulerRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   // Playhead Drag State
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
-  
+
   // Element Drag State
   const [dragState, setDragState] = useState<{
-      mode: DragMode;
-      elementId: string;
-      startX: number;
-      originalStartTime: number;
-      originalDuration: number;
-      originalMediaOffset: number;
-      originalTrackId: number;
+    mode: DragMode;
+    elementId: string;
+    startX: number;
+    originalStartTime: number;
+    originalDuration: number;
+    originalMediaOffset: number;
+    originalTrackId: number;
   } | null>(null);
+
+  // Snap indicator state
+  const [snapIndicator, setSnapIndicator] = useState<{ time: number; trackId: number } | null>(null);
+
+  // Helper: Find all snap points (element edges) on a given track, excluding the dragged element
+  const findSnapPoints = useCallback((trackId: number, excludeElementId: string): number[] => {
+    const points: number[] = [0]; // Always include time 0
+    elements
+      .filter(el => el.trackId === trackId && el.id !== excludeElementId)
+      .forEach(el => {
+        points.push(el.startTime); // Start edge
+        points.push(el.startTime + el.duration); // End edge
+      });
+    return points;
+  }, [elements]);
+
+  // Helper: Snap a time value to nearest snap point if within threshold
+  const snapToNearestPoint = useCallback((time: number, snapPoints: number[], shiftPressed: boolean): { snapped: number; didSnap: boolean } => {
+    if (shiftPressed) {
+      return { snapped: time, didSnap: false }; // Shift disables snapping
+    }
+
+    const thresholdTime = SNAP_THRESHOLD_PX / pixelsPerSecond;
+    let nearestPoint = time;
+    let minDistance = Infinity;
+
+    for (const point of snapPoints) {
+      const distance = Math.abs(time - point);
+      if (distance < minDistance && distance < thresholdTime) {
+        minDistance = distance;
+        nearestPoint = point;
+      }
+    }
+
+    return { snapped: nearestPoint, didSnap: minDistance < thresholdTime };
+  }, [pixelsPerSecond]);
 
   // -- Playhead Logic --
   const handleRulerMouseDown = (e: React.MouseEvent) => {
@@ -67,19 +110,19 @@ const Timeline: React.FC<TimelineProps> = ({
 
   // -- Element Interaction Logic --
   const handleElementInteraction = (e: React.MouseEvent, type: DragMode, elementId: string, trackId: number, startTime: number, duration: number, mediaOffset: number) => {
-      e.stopPropagation();
-      e.preventDefault(); 
-      onSelectElement(elementId);
-      
-      setDragState({
-          mode: type,
-          elementId,
-          startX: e.clientX,
-          originalStartTime: startTime,
-          originalDuration: duration,
-          originalMediaOffset: mediaOffset,
-          originalTrackId: trackId
-      });
+    e.stopPropagation();
+    e.preventDefault();
+    onSelectElement(elementId);
+
+    setDragState({
+      mode: type,
+      elementId,
+      startX: e.clientX,
+      originalStartTime: startTime,
+      originalDuration: duration,
+      originalMediaOffset: mediaOffset,
+      originalTrackId: trackId
+    });
   };
 
   // Global Mouse Move / Up for dragging
@@ -90,68 +133,112 @@ const Timeline: React.FC<TimelineProps> = ({
       }
 
       if (dragState) {
-          e.preventDefault();
-          const deltaX = e.clientX - dragState.startX;
-          const deltaTime = deltaX / pixelsPerSecond;
-          
-          if (dragState.mode === 'MOVE') {
-              let newStartTime = Math.max(0, dragState.originalStartTime + deltaTime);
-              
-              // Determine Track
-              const trackElement = (e.target as HTMLElement).closest('[data-track-id]');
-              let newTrackId = dragState.originalTrackId;
-              if (trackElement) {
-                  const id = Number(trackElement.getAttribute('data-track-id'));
-                  if (!isNaN(id)) newTrackId = id;
-              } else {
-                  const elementsUnder = document.elementsFromPoint(e.clientX, e.clientY);
-                  const trackDiv = elementsUnder.find(el => el.hasAttribute('data-track-id'));
-                  if (trackDiv) {
-                       const id = Number(trackDiv.getAttribute('data-track-id'));
-                       if (!isNaN(id)) newTrackId = id;
-                  }
-              }
+        e.preventDefault();
+        const deltaX = e.clientX - dragState.startX;
+        const deltaTime = deltaX / pixelsPerSecond;
+        const shiftPressed = e.shiftKey;
 
-              onUpdateElement(dragState.elementId, { 
-                  startTime: newStartTime,
-                  trackId: newTrackId
-              });
+        if (dragState.mode === 'MOVE') {
+          let newStartTime = Math.max(0, dragState.originalStartTime + deltaTime);
+          const elementDuration = dragState.originalDuration;
 
-          } else if (dragState.mode === 'RESIZE_R') {
-              // Resize Right Edge: Changes Duration
-              const newDuration = Math.max(0.5, dragState.originalDuration + deltaTime);
-              onUpdateElement(dragState.elementId, {
-                  duration: newDuration
-              });
-
-          } else if (dragState.mode === 'RESIZE_L') {
-              // Resize Left Edge: Changes StartTime, Duration, and MediaOffset
-              // New start time
-              let newStartTime = dragState.originalStartTime + deltaTime;
-              // Clamp to 0
-              if (newStartTime < 0) newStartTime = 0;
-              
-              // Calculate effective delta after clamping
-              const effectiveDelta = newStartTime - dragState.originalStartTime;
-              const newDuration = Math.max(0.5, dragState.originalDuration - effectiveDelta);
-
-              // If duration hit min, stop moving start time
-              if (newDuration === 0.5) {
-                   newStartTime = dragState.originalStartTime + (dragState.originalDuration - 0.5);
-              }
-
-              onUpdateElement(dragState.elementId, {
-                  startTime: newStartTime,
-                  duration: newDuration,
-                  mediaOffset: dragState.originalMediaOffset + effectiveDelta 
-              });
+          // Determine Track
+          const trackElement = (e.target as HTMLElement).closest('[data-track-id]');
+          let newTrackId = dragState.originalTrackId;
+          if (trackElement) {
+            const id = Number(trackElement.getAttribute('data-track-id'));
+            if (!isNaN(id)) newTrackId = id;
+          } else {
+            const elementsUnder = document.elementsFromPoint(e.clientX, e.clientY);
+            const trackDiv = elementsUnder.find(el => el.hasAttribute('data-track-id'));
+            if (trackDiv) {
+              const id = Number(trackDiv.getAttribute('data-track-id'));
+              if (!isNaN(id)) newTrackId = id;
+            }
           }
+
+          // Apply magnetic snapping for start edge
+          const snapPoints = findSnapPoints(newTrackId, dragState.elementId);
+          const startSnap = snapToNearestPoint(newStartTime, snapPoints, shiftPressed);
+
+          // Also try snapping the end edge
+          const endTime = newStartTime + elementDuration;
+          const endSnap = snapToNearestPoint(endTime, snapPoints, shiftPressed);
+
+          // Prefer whichever snap is closer
+          if (endSnap.didSnap && (!startSnap.didSnap || Math.abs(endTime - endSnap.snapped) < Math.abs(newStartTime - startSnap.snapped))) {
+            newStartTime = endSnap.snapped - elementDuration;
+            setSnapIndicator({ time: endSnap.snapped, trackId: newTrackId });
+          } else if (startSnap.didSnap) {
+            newStartTime = startSnap.snapped;
+            setSnapIndicator({ time: startSnap.snapped, trackId: newTrackId });
+          } else {
+            setSnapIndicator(null);
+          }
+
+          onUpdateElement(dragState.elementId, {
+            startTime: Math.max(0, newStartTime),
+            trackId: newTrackId
+          });
+
+        } else if (dragState.mode === 'RESIZE_R') {
+          // Resize Right Edge: Changes Duration
+          let newEndTime = dragState.originalStartTime + dragState.originalDuration + deltaTime;
+          const snapPoints = findSnapPoints(dragState.originalTrackId, dragState.elementId);
+          const snap = snapToNearestPoint(newEndTime, snapPoints, shiftPressed);
+
+          if (snap.didSnap) {
+            newEndTime = snap.snapped;
+            setSnapIndicator({ time: snap.snapped, trackId: dragState.originalTrackId });
+          } else {
+            setSnapIndicator(null);
+          }
+
+          const newDuration = Math.max(0.5, newEndTime - dragState.originalStartTime);
+          onUpdateElement(dragState.elementId, {
+            duration: newDuration
+          });
+
+        } else if (dragState.mode === 'RESIZE_L') {
+          // Resize Left Edge: Changes StartTime, Duration, and MediaOffset
+          let newStartTime = dragState.originalStartTime + deltaTime;
+
+          // Apply snapping
+          const snapPoints = findSnapPoints(dragState.originalTrackId, dragState.elementId);
+          const snap = snapToNearestPoint(newStartTime, snapPoints, shiftPressed);
+
+          if (snap.didSnap) {
+            newStartTime = snap.snapped;
+            setSnapIndicator({ time: snap.snapped, trackId: dragState.originalTrackId });
+          } else {
+            setSnapIndicator(null);
+          }
+
+          // Clamp to 0
+          if (newStartTime < 0) newStartTime = 0;
+
+          // Calculate effective delta after clamping
+          const effectiveDelta = newStartTime - dragState.originalStartTime;
+          const newDuration = Math.max(0.5, dragState.originalDuration - effectiveDelta);
+
+          // If duration hit min, stop moving start time
+          if (newDuration === 0.5) {
+            newStartTime = dragState.originalStartTime + (dragState.originalDuration - 0.5);
+          }
+
+          onUpdateElement(dragState.elementId, {
+            startTime: newStartTime,
+            duration: newDuration,
+            mediaOffset: dragState.originalMediaOffset + effectiveDelta
+          });
+        }
       }
     };
 
     const handleMouseUp = () => {
       setIsDraggingPlayhead(false);
       setDragState(null);
+      setSnapIndicator(null); // Clear snap indicator on release
     };
 
     if (isDraggingPlayhead || dragState) {
@@ -162,28 +249,28 @@ const Timeline: React.FC<TimelineProps> = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDraggingPlayhead, dragState, pixelsPerSecond, onSeek, onUpdateElement]);
+  }, [isDraggingPlayhead, dragState, pixelsPerSecond, onSeek, onUpdateElement, findSnapPoints, snapToNearestPoint]);
 
 
   // -- Library Asset Drop Logic --
   const handleDragOver = (e: React.DragEvent) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
   };
-  
+
   const handleDrop = (e: React.DragEvent, trackId: number) => {
-      e.preventDefault();
-      
-      const assetId = e.dataTransfer.getData('application/react-frame-asset-id');
+    e.preventDefault();
 
-      if (assetId && onAddAsset) {
-          // Calculate time from drop position relative to the track container
-          const rect = e.currentTarget.getBoundingClientRect();
-          const x = e.clientX - rect.left - 96;
-          const dropTime = Math.max(0, x / pixelsPerSecond);
+    const assetId = e.dataTransfer.getData('application/react-frame-asset-id');
 
-          onAddAsset(assetId, trackId, dropTime);
-      }
+    if (assetId && onAddAsset) {
+      // Calculate time from drop position relative to the track container
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left - 96;
+      const dropTime = Math.max(0, x / pixelsPerSecond);
+
+      onAddAsset(assetId, trackId, dropTime);
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -204,76 +291,109 @@ const Timeline: React.FC<TimelineProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 text-gray-800 dark:text-gray-200 select-none transition-colors" ref={containerRef}>
-      
+
       {/* Tools / Header */}
       <div className="h-10 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center px-4 justify-between transition-colors">
         <div className="flex space-x-4 text-xs items-center">
           <span className="font-mono text-blue-600 dark:text-blue-400">{formatTime(currentTime)}</span>
           <div className="h-4 w-px bg-gray-300 dark:bg-gray-700"></div>
-          
-          <button 
+
+          <button
             onClick={onSplit}
             className="flex items-center space-x-1 hover:bg-gray-100 dark:hover:bg-gray-800 px-2 py-1 rounded transition text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white"
             title="Split Clip at Playhead"
           >
-              <ScissorsIcon className="w-4 h-4" />
-              <span>Split</span>
+            <ScissorsIcon className="w-4 h-4" />
+            <span>Split</span>
           </button>
         </div>
 
         <div className="flex items-center space-x-2">
-            <span className="text-xs text-gray-500">Zoom</span>
-            <input 
-                type="range" min="10" max="200" 
-                value={pixelsPerSecond} 
-                onChange={(e) => setPixelsPerSecond(Number(e.target.value))}
-                className="w-24 h-1 bg-gray-300 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
-            />
+          <span className="text-xs text-gray-500">Zoom</span>
+          <input
+            type="range" min="10" max="200"
+            value={pixelsPerSecond}
+            onChange={(e) => setPixelsPerSecond(Number(e.target.value))}
+            className="w-24 h-1 bg-gray-300 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+          />
         </div>
       </div>
 
       <div className="flex-grow relative overflow-x-auto overflow-y-hidden custom-scrollbar">
         <div className="relative min-w-full" style={{ width: `${totalWidth + 96}px` }}>
-            
-            {/* Ruler */}
-            <div 
-                ref={rulerRef}
-                className="h-8 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 relative cursor-pointer transition-colors"
-                onMouseDown={handleRulerMouseDown}
+
+          {/* Ruler */}
+          <div
+            ref={rulerRef}
+            className="h-8 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 relative cursor-pointer transition-colors"
+            onMouseDown={handleRulerMouseDown}
+          >
+            <div className="w-24 h-full border-r border-gray-200 dark:border-gray-700 absolute left-0 bg-gray-100 dark:bg-gray-800 z-20 transition-colors"></div>
+            <div className="absolute left-24 right-0 top-0 bottom-0">{markers}</div>
+          </div>
+
+          {/* Tracks */}
+          <div className="relative">
+            {/* Playhead */}
+            <div
+              className="absolute top-0 bottom-0 w-px bg-red-500 z-30 pointer-events-none"
+              style={{ left: `${(currentTime * pixelsPerSecond) + 96}px`, height: '1000px' }}
             >
-                <div className="w-24 h-full border-r border-gray-200 dark:border-gray-700 absolute left-0 bg-gray-100 dark:bg-gray-800 z-20 transition-colors"></div>
-                <div className="absolute left-24 right-0 top-0 bottom-0">{markers}</div>
+              <div className="w-3 h-3 bg-red-500 transform -translate-x-1/2 -translate-y-1/2 rotate-45 absolute top-0"></div>
             </div>
 
-            {/* Tracks */}
-            <div className="relative">
-                 <div 
-                    className="absolute top-0 bottom-0 w-px bg-red-500 z-30 pointer-events-none"
-                    style={{ left: `${(currentTime * pixelsPerSecond) + 96}px`, height: '1000px' }} 
+            {/* Snap Indicator Line */}
+            {snapIndicator && (
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-green-500 z-40 pointer-events-none animate-pulse"
+                style={{ left: `${(snapIndicator.time * pixelsPerSecond) + 96}px`, height: '1000px' }}
+              >
+                <div className="w-2 h-2 bg-green-500 rounded-full transform -translate-x-1/2 absolute top-0"></div>
+              </div>
+            )}
+
+            {tracks.map((track, index) => (
+              <React.Fragment key={track.id}>
+                <div
+                  data-track-id={track.id}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, track.id)}
                 >
-                    <div className="w-3 h-3 bg-red-500 transform -translate-x-1/2 -translate-y-1/2 rotate-45 absolute top-0"></div>
+                  <TimelineTrack
+                    track={track}
+                    elements={elements}
+                    currentTime={currentTime}
+                    pixelsPerSecond={pixelsPerSecond}
+                    onSelectElement={onSelectElement}
+                    selectedElementId={selectedElementId}
+                    onUpdateElement={onUpdateElement}
+                    onElementInteraction={handleElementInteraction}
+                    onInsertTrack={onInsertTrack}
+                    onDeleteTrack={onDeleteTrack}
+                    trackCount={tracks.length}
+                  />
                 </div>
 
-                {tracks.map(track => (
-                    <div 
-                        key={track.id} 
-                        data-track-id={track.id}
-                        onDragOver={handleDragOver} 
-                        onDrop={(e) => handleDrop(e, track.id)}
-                    >
-                        <TimelineTrack
-                            track={track}
-                            elements={elements}
-                            currentTime={currentTime}
-                            pixelsPerSecond={pixelsPerSecond}
-                            onSelectElement={onSelectElement}
-                            selectedElementId={selectedElementId}
-                            onUpdateElement={onUpdateElement}
-                            onElementInteraction={handleElementInteraction}
-                        />
+                {/* Insert Layer Button - appears on hover between tracks */}
+                {onInsertTrack && (
+                  <div
+                    className="group relative h-0 w-full"
+                  >
+                    <div className="absolute left-0 right-0 top-0 h-2 -translate-y-1/2 z-20 flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute inset-0 bg-blue-500/20 hover:bg-blue-500/40 transition-colors" />
+                      <button
+                        onClick={() => onInsertTrack(track.id)}
+                        className="relative z-10 flex items-center space-x-1 bg-blue-500 hover:bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full shadow-lg transform scale-90 hover:scale-100 transition-all"
+                      >
+                        <span className="font-bold">+</span>
+                        <span>Add Layer</span>
+                      </button>
                     </div>
-                ))}
-            </div>
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
         </div>
       </div>
     </div>

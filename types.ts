@@ -20,7 +20,7 @@ export interface ElementProps {
   borderWidth?: number;
   volume?: number; // 0-1
   isMuted?: boolean;
-  
+
   // New properties for Custom AI Components
   html?: string;
   customCss?: string;
@@ -34,15 +34,18 @@ export interface EditorElement {
   startTime: number; // in seconds (Timeline position)
   duration: number; // in seconds
   mediaOffset: number; // in seconds (Start point in the source media)
-  
+
   // Visual properties for overlay
   x: number; // percentage 0-100
   y: number; // percentage 0-100
   width: number; // percentage
   height: number; // percentage
   rotation: number;
-  
+
   props: ElementProps;
+
+  // For persisting media elements across page refreshes
+  assetId?: string;
 }
 
 export interface Track {
