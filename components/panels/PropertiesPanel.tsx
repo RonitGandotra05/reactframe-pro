@@ -99,6 +99,25 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ element, onUpdate, on
                             </div>
                         )}
 
+                        {/* Playback Speed - Video only */}
+                        {element.type === ElementType.VIDEO && (
+                            <div>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">Speed ({element.props.playbackRate ?? 1}x)</span>
+                                <input
+                                    type="range" min="0.25" max="4" step="0.25"
+                                    value={element.props.playbackRate ?? 1}
+                                    onChange={(e) => handleChange('playbackRate', Number(e.target.value))}
+                                    className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer mt-1"
+                                />
+                                <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                                    <span>0.25x</span>
+                                    <span>1x</span>
+                                    <span>2x</span>
+                                    <span>4x</span>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Split Audio button - only for VIDEO elements */}
                         {element.type === ElementType.VIDEO && onSplitAudio && (
                             <button
@@ -133,12 +152,143 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ element, onUpdate, on
                                 <span className="text-xs text-gray-500 dark:text-gray-400">H (%)</span>
                                 <input type="number" value={Math.round(element.height)} onChange={(e) => handleGeometryChange('height', Number(e.target.value))} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-xs text-gray-900 dark:text-white" />
                             </div>
+                            <div>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">Rotation (°)</span>
+                                <input type="number" value={Math.round(element.rotation)} onChange={(e) => handleGeometryChange('rotation', Number(e.target.value))} className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-xs text-gray-900 dark:text-white" />
+                            </div>
                         </div>
                     </div>
                 )}
 
-                {/* Visual Styles for Video and Shapes */}
-                {(element.type === ElementType.TEXT || element.type === ElementType.SHAPE || element.type === ElementType.AI_GENERATED || element.type === ElementType.VIDEO || element.type === ElementType.IMAGE) && (
+                {/* Video Filters - DaVinci Style */}
+                {(element.type === ElementType.VIDEO || element.type === ElementType.IMAGE) && (
+                    <div className="space-y-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+                        <label className="text-xs text-gray-500 uppercase font-bold">🎨 Video Filters</label>
+
+                        <div>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Opacity ({Math.round((element.props.opacity ?? 1) * 100)}%)</span>
+                            <input
+                                type="range" min="0" max="1" step="0.05"
+                                value={element.props.opacity ?? 1}
+                                onChange={(e) => handleChange('opacity', Number(e.target.value))}
+                                className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer mt-1"
+                            />
+                        </div>
+
+                        <div>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Brightness ({Math.round((element.props.brightness ?? 1) * 100)}%)</span>
+                            <input
+                                type="range" min="0" max="2" step="0.05"
+                                value={element.props.brightness ?? 1}
+                                onChange={(e) => handleChange('brightness', Number(e.target.value))}
+                                className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer mt-1"
+                            />
+                        </div>
+
+                        <div>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Contrast ({Math.round((element.props.contrast ?? 1) * 100)}%)</span>
+                            <input
+                                type="range" min="0" max="2" step="0.05"
+                                value={element.props.contrast ?? 1}
+                                onChange={(e) => handleChange('contrast', Number(e.target.value))}
+                                className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer mt-1"
+                            />
+                        </div>
+
+                        <div>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Saturation ({Math.round((element.props.saturation ?? 1) * 100)}%)</span>
+                            <input
+                                type="range" min="0" max="2" step="0.05"
+                                value={element.props.saturation ?? 1}
+                                onChange={(e) => handleChange('saturation', Number(e.target.value))}
+                                className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer mt-1"
+                            />
+                        </div>
+
+                        <div>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Blur ({element.props.blur ?? 0}px)</span>
+                            <input
+                                type="range" min="0" max="20" step="1"
+                                value={element.props.blur ?? 0}
+                                onChange={(e) => handleChange('blur', Number(e.target.value))}
+                                className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer mt-1"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">Grayscale</span>
+                                <input
+                                    type="range" min="0" max="1" step="0.1"
+                                    value={element.props.grayscale ?? 0}
+                                    onChange={(e) => handleChange('grayscale', Number(e.target.value))}
+                                    className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer mt-1"
+                                />
+                            </div>
+                            <div>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">Sepia</span>
+                                <input
+                                    type="range" min="0" max="1" step="0.1"
+                                    value={element.props.sepia ?? 0}
+                                    onChange={(e) => handleChange('sepia', Number(e.target.value))}
+                                    className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer mt-1"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Hue Rotate ({element.props.hueRotate ?? 0}°)</span>
+                            <input
+                                type="range" min="0" max="360" step="5"
+                                value={element.props.hueRotate ?? 0}
+                                onChange={(e) => handleChange('hueRotate', Number(e.target.value))}
+                                className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer mt-1"
+                            />
+                        </div>
+
+                        <div>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Blend Mode</span>
+                            <select
+                                value={element.props.blendMode ?? 'normal'}
+                                onChange={(e) => handleChange('blendMode', e.target.value)}
+                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-xs text-gray-900 dark:text-white mt-1"
+                            >
+                                <option value="normal">Normal</option>
+                                <option value="multiply">Multiply</option>
+                                <option value="screen">Screen</option>
+                                <option value="overlay">Overlay</option>
+                                <option value="darken">Darken</option>
+                                <option value="lighten">Lighten</option>
+                                <option value="color-dodge">Color Dodge</option>
+                                <option value="color-burn">Color Burn</option>
+                                <option value="hard-light">Hard Light</option>
+                                <option value="soft-light">Soft Light</option>
+                                <option value="difference">Difference</option>
+                                <option value="exclusion">Exclusion</option>
+                            </select>
+                        </div>
+
+                        <button
+                            onClick={() => {
+                                handleChange('opacity', 1);
+                                handleChange('brightness', 1);
+                                handleChange('contrast', 1);
+                                handleChange('saturation', 1);
+                                handleChange('blur', 0);
+                                handleChange('grayscale', 0);
+                                handleChange('sepia', 0);
+                                handleChange('hueRotate', 0);
+                                handleChange('blendMode', 'normal');
+                            }}
+                            className="w-full py-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 rounded text-xs text-gray-600 dark:text-gray-400 transition"
+                        >
+                            Reset Filters
+                        </button>
+                    </div>
+                )}
+
+                {/* Visual Styles for Text and Shapes */}
+                {(element.type === ElementType.TEXT || element.type === ElementType.SHAPE || element.type === ElementType.AI_GENERATED) && (
                     <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-800">
                         <label className="text-xs text-gray-500 uppercase font-bold">Appearance</label>
 
@@ -153,28 +303,26 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ element, onUpdate, on
                             </div>
                         )}
 
-                        {(element.type !== ElementType.IMAGE && element.type !== ElementType.VIDEO) && (
-                            <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                    <span className="text-xs text-gray-500 dark:text-gray-400">Text Color</span>
-                                    <input
-                                        type="color"
-                                        value={element.props.color?.startsWith('#') ? element.props.color : '#ffffff'}
-                                        onChange={(e) => handleChange('color', e.target.value)}
-                                        className="w-full h-8 bg-transparent cursor-pointer"
-                                    />
-                                </div>
-                                <div>
-                                    <span className="text-xs text-gray-500 dark:text-gray-400">Bg Color</span>
-                                    <input
-                                        type="color"
-                                        value={element.props.backgroundColor?.startsWith('#') ? element.props.backgroundColor : '#000000'}
-                                        onChange={(e) => handleChange('backgroundColor', e.target.value)}
-                                        className="w-full h-8 bg-transparent cursor-pointer"
-                                    />
-                                </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">Text Color</span>
+                                <input
+                                    type="color"
+                                    value={element.props.color?.startsWith('#') ? element.props.color : '#ffffff'}
+                                    onChange={(e) => handleChange('color', e.target.value)}
+                                    className="w-full h-8 bg-transparent cursor-pointer"
+                                />
                             </div>
-                        )}
+                            <div>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">Bg Color</span>
+                                <input
+                                    type="color"
+                                    value={element.props.backgroundColor?.startsWith('#') ? element.props.backgroundColor : '#000000'}
+                                    onChange={(e) => handleChange('backgroundColor', e.target.value)}
+                                    className="w-full h-8 bg-transparent cursor-pointer"
+                                />
+                            </div>
+                        </div>
 
                         <div className="grid grid-cols-2 gap-2">
                             <div>

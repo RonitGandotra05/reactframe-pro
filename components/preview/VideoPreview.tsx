@@ -71,6 +71,8 @@ const VideoPreview = forwardRef<VideoPreviewHandle, VideoPreviewProps>(({
           }
           el.volume = element.props.volume ?? 1;
           el.muted = element.props.isMuted ?? false;
+          // Apply playback rate (speed control)
+          el.playbackRate = element.props.playbackRate ?? 1;
         } else {
           if (!el.paused) el.pause();
         }
@@ -257,6 +259,18 @@ const VideoPreview = forwardRef<VideoPreviewHandle, VideoPreviewProps>(({
       overflow: 'hidden',
       border: el.props.borderWidth ? `${el.props.borderWidth}px solid ${el.props.borderColor || 'black'}` : 'none',
       pointerEvents: 'none',
+      // DaVinci-style CSS Filters
+      filter: (el.type === ElementType.VIDEO || el.type === ElementType.IMAGE) ? [
+        el.props.blur ? `blur(${el.props.blur}px)` : '',
+        el.props.brightness !== undefined && el.props.brightness !== 1 ? `brightness(${el.props.brightness})` : '',
+        el.props.contrast !== undefined && el.props.contrast !== 1 ? `contrast(${el.props.contrast})` : '',
+        el.props.saturation !== undefined && el.props.saturation !== 1 ? `saturate(${el.props.saturation})` : '',
+        el.props.grayscale ? `grayscale(${el.props.grayscale})` : '',
+        el.props.sepia ? `sepia(${el.props.sepia})` : '',
+        el.props.hueRotate ? `hue-rotate(${el.props.hueRotate}deg)` : '',
+      ].filter(Boolean).join(' ') || undefined : undefined,
+      // Blend Mode
+      mixBlendMode: el.props.blendMode as React.CSSProperties['mixBlendMode'] || undefined,
     };
 
     // AI Generated Custom HTML

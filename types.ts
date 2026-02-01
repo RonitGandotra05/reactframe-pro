@@ -14,7 +14,7 @@ export interface ElementProps {
   color?: string;
   fontSize?: number;
   borderRadius?: number;
-  opacity?: number;
+  opacity?: number; // 0-1, default 1
   src?: string; // For images/videos/audio
   borderColor?: string;
   borderWidth?: number;
@@ -24,6 +24,19 @@ export interface ElementProps {
   // New properties for Custom AI Components
   html?: string;
   customCss?: string;
+
+  // DaVinci-style properties
+  playbackRate?: number; // 0.25 to 4, default 1
+  blendMode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten' | 'color-dodge' | 'color-burn' | 'hard-light' | 'soft-light' | 'difference' | 'exclusion';
+
+  // Video Filters
+  blur?: number; // pixels
+  brightness?: number; // 0-2, default 1
+  contrast?: number; // 0-2, default 1
+  saturation?: number; // 0-2, default 1
+  grayscale?: number; // 0-1
+  sepia?: number; // 0-1
+  hueRotate?: number; // degrees 0-360
 }
 
 export interface EditorElement {
