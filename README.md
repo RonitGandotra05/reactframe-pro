@@ -1,15 +1,17 @@
 # Motion Labs
 
-A browser-based, React + TypeScript video editor prototype built with Vite. It includes a timeline editor, layer/track management, a preview canvas, and basic asset handling to explore non-linear editing workflows in the browser.
+A next-generation browser-based video editor that combines a professional **DaVinci Resolve-style** non-linear editing (NLE) workflow with the power of the web.
+
+Unlike traditional video editors, Motion Labs allows you to mix standard media (video, audio, images) directly with **live React components** and AI-generated elements on the timeline.
 
 ## Features
 
-- Multi-track timeline with playhead, zoom, and snapping-friendly layout
-- Asset library with drag-to-track and upload support
-- Layer controls (visibility, lock, ordering)
-- Video/audio/image/text/shape elements
-- Theme toggle (light/dark)
-- Export/preview panel scaffolding
+- 🎬 **Pro NLE Interface**: Multi-track timeline with JKL shuttle controls, snapping, and precise layer management inspired by DaVinci Resolve.
+- ⚛️ **React on Timeline**: Drop fully functional React components onto the timeline as video layers.
+- 🤖 **AI Generation**: Generate custom UI elements or animations on the fly using Generative AI.
+- 🎚️ **Advanced Controls**: Keyframe-ready properties, visibility toggles, track locking, and blending modes.
+- 🌓 **Themed UI**: Sleek dark/light mode adaptable interface.
+- 🚀 **Browser Native**: Built with Vite and React 19 for high-performance client-side rendering.
 
 ## Tech Stack
 
