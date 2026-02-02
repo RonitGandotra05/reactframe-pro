@@ -93,6 +93,7 @@ export interface EditorElement {
   zIndex: number; // Layer stacking order
   flipX?: boolean; // Flip horizontally
   flipY?: boolean; // Flip vertically
+  lockAspectRatio?: boolean; // Lock aspect ratio during resize
 
   // Transitions
   transitionIn?: Transition;

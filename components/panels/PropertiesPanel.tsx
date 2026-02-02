@@ -266,6 +266,15 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ element, onUpdate, on
                             <span>Fit to Frame (100%)</span>
                         </button>
 
+                        {/* Lock Aspect Ratio */}
+                        <button
+                            onClick={() => onUpdate(element.id, { lockAspectRatio: !element.lockAspectRatio })}
+                            className={`w-full py-1.5 border rounded text-xs transition flex items-center justify-center space-x-1 ${element.lockAspectRatio ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        >
+                            <span>{element.lockAspectRatio ? '🔒' : '🔓'}</span>
+                            <span>Lock Aspect Ratio</span>
+                        </button>
+
                         {/* Flip Controls */}
                         <div className="flex gap-2 pt-1">
                             <button
@@ -281,6 +290,60 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ element, onUpdate, on
                             >
                                 <span>↕</span>
                                 <span>Flip V</span>
+                            </button>
+                        </div>
+
+                        {/* Drop Shadow */}
+                        <div className="pt-3">
+                            <label className="text-xs text-gray-500 uppercase font-bold">🌓 Drop Shadow</label>
+                            <div className="grid grid-cols-2 gap-2 mt-2">
+                                <div>
+                                    <span className="text-[10px] text-gray-400">Color</span>
+                                    <input
+                                        type="color"
+                                        value={element.props.shadowColor || '#000000'}
+                                        onChange={(e) => handleChange('shadowColor', e.target.value)}
+                                        className="w-full h-6 bg-transparent cursor-pointer"
+                                    />
+                                </div>
+                                <div>
+                                    <span className="text-[10px] text-gray-400">Blur ({element.props.shadowBlur ?? 0}px)</span>
+                                    <input
+                                        type="range" min="0" max="50" step="1"
+                                        value={element.props.shadowBlur ?? 0}
+                                        onChange={(e) => handleChange('shadowBlur', Number(e.target.value))}
+                                        className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                </div>
+                                <div>
+                                    <span className="text-[10px] text-gray-400">Offset X</span>
+                                    <input
+                                        type="number" step="1" min="-50" max="50"
+                                        value={element.props.shadowX ?? 4}
+                                        onChange={(e) => handleChange('shadowX', Number(e.target.value))}
+                                        className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-0.5 text-xs text-gray-900 dark:text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <span className="text-[10px] text-gray-400">Offset Y</span>
+                                    <input
+                                        type="number" step="1" min="-50" max="50"
+                                        value={element.props.shadowY ?? 4}
+                                        onChange={(e) => handleChange('shadowY', Number(e.target.value))}
+                                        className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-0.5 text-xs text-gray-900 dark:text-white"
+                                    />
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    handleChange('shadowColor', undefined);
+                                    handleChange('shadowBlur', 0);
+                                    handleChange('shadowX', 0);
+                                    handleChange('shadowY', 0);
+                                }}
+                                className="w-full mt-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 rounded text-[10px] text-gray-500 transition"
+                            >
+                                Remove Shadow
                             </button>
                         </div>
                     </div>
