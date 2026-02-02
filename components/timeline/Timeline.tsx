@@ -18,6 +18,8 @@ interface TimelineProps {
   onAddAsset?: (assetId: string, trackId: number, startTime: number) => void;
   onInsertTrack?: (afterTrackId: number) => void;
   onDeleteTrack?: (trackId: number) => void;
+  rippleEditMode?: boolean;
+  onToggleRippleEdit?: () => void;
 }
 
 type DragMode = 'MOVE' | 'RESIZE_L' | 'RESIZE_R';
@@ -39,7 +41,9 @@ const Timeline: React.FC<TimelineProps> = ({
   setPixelsPerSecond,
   onAddAsset,
   onInsertTrack,
-  onDeleteTrack
+  onDeleteTrack,
+  rippleEditMode = false,
+  onToggleRippleEdit
 }) => {
   const rulerRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -61,9 +65,9 @@ const Timeline: React.FC<TimelineProps> = ({
   // Snap indicator state
   const [snapIndicator, setSnapIndicator] = useState<{ time: number; trackId: number } | null>(null);
 
-  // Helper: Find all snap points (element edges) on a given track, excluding the dragged element
+  // Helper: Find all snap points (element edges + playhead) on a given track, excluding the dragged element
   const findSnapPoints = useCallback((trackId: number, excludeElementId: string): number[] => {
-    const points: number[] = [0]; // Always include time 0
+    const points: number[] = [0, currentTime]; // Include time 0 and playhead position
     elements
       .filter(el => el.trackId === trackId && el.id !== excludeElementId)
       .forEach(el => {
@@ -71,7 +75,7 @@ const Timeline: React.FC<TimelineProps> = ({
         points.push(el.startTime + el.duration); // End edge
       });
     return points;
-  }, [elements]);
+  }, [elements, currentTime]);
 
   // Helper: Snap a time value to nearest snap point if within threshold
   const snapToNearestPoint = useCallback((time: number, snapPoints: number[], shiftPressed: boolean): { snapped: number; didSnap: boolean } => {
@@ -306,6 +310,17 @@ const Timeline: React.FC<TimelineProps> = ({
             <ScissorsIcon className="w-4 h-4" />
             <span>Split</span>
           </button>
+
+          {onToggleRippleEdit && (
+            <button
+              onClick={onToggleRippleEdit}
+              className={`flex items-center space-x-1 px-2 py-1 rounded transition ${rippleEditMode ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-600 dark:text-orange-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'}`}
+              title="Ripple Edit Mode - shifts subsequent clips when trimming/deleting"
+            >
+              <span>⟷</span>
+              <span>Ripple</span>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center space-x-2">
