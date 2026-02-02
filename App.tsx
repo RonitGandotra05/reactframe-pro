@@ -241,9 +241,15 @@ function App() {
     }
   }, [project.elements, project.tracks, project.markers]);
 
-  // Keyboard shortcuts for undo/redo
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) {
+        return;
+      }
+
+      // Undo/Redo: Cmd+Z / Cmd+Shift+Z
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
         e.preventDefault();
         if (e.shiftKey) {
@@ -251,11 +257,108 @@ function App() {
         } else {
           handleUndo();
         }
+        return;
+      }
+
+      // Play/Pause: Spacebar
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        setProject(prev => ({ ...prev, isPlaying: !prev.isPlaying }));
+        return;
+      }
+
+      // Delete element: Delete or Backspace
+      if ((e.key === 'Delete' || e.key === 'Backspace') && project.selectedElementId) {
+        e.preventDefault();
+        saveToHistory();
+        setProject(prev => ({
+          ...prev,
+          elements: prev.elements.filter(el => el.id !== prev.selectedElementId),
+          selectedElementId: null
+        }));
+        return;
+      }
+
+      // Duplicate element: D
+      if (e.key === 'd' && project.selectedElementId && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        const selectedEl = project.elements.find(el => el.id === project.selectedElementId);
+        if (selectedEl) {
+          saveToHistory();
+          const newElement: EditorElement = {
+            ...selectedEl,
+            id: `${selectedEl.type.toLowerCase()}-${Date.now()}`,
+            name: `${selectedEl.name} Copy`,
+            x: Math.min(selectedEl.x + 5, 90),
+            y: Math.min(selectedEl.y + 5, 90),
+          };
+          setProject(prev => ({
+            ...prev,
+            elements: [...prev.elements, newElement],
+            selectedElementId: newElement.id
+          }));
+        }
+        return;
+      }
+
+      // Arrow keys: Nudge position
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && project.selectedElementId) {
+        e.preventDefault();
+        const nudgeAmount = e.shiftKey ? 10 : 1; // Shift for bigger nudge
+        setProject(prev => ({
+          ...prev,
+          elements: prev.elements.map(el => {
+            if (el.id !== prev.selectedElementId) return el;
+            switch (e.key) {
+              case 'ArrowUp': return { ...el, y: Math.max(0, el.y - nudgeAmount) };
+              case 'ArrowDown': return { ...el, y: Math.min(100, el.y + nudgeAmount) };
+              case 'ArrowLeft': return { ...el, x: Math.max(0, el.x - nudgeAmount) };
+              case 'ArrowRight': return { ...el, x: Math.min(100, el.x + nudgeAmount) };
+              default: return el;
+            }
+          })
+        }));
+        return;
+      }
+
+      // Home: Jump to start
+      if (e.key === 'Home') {
+        e.preventDefault();
+        setProject(prev => ({ ...prev, currentTime: 0 }));
+        return;
+      }
+
+      // End: Jump to end
+      if (e.key === 'End') {
+        e.preventDefault();
+        setProject(prev => ({ ...prev, currentTime: prev.duration }));
+        return;
+      }
+
+      // J/K/L shuttle control (DaVinci style)
+      if (e.key === 'j') {
+        // Rewind - go back 5 seconds
+        setProject(prev => ({ ...prev, currentTime: Math.max(0, prev.currentTime - 5) }));
+        return;
+      }
+      if (e.key === 'k') {
+        // Pause
+        setProject(prev => ({ ...prev, isPlaying: false }));
+        return;
+      }
+      if (e.key === 'l') {
+        // Forward - go forward 5 seconds or play
+        setProject(prev => ({
+          ...prev,
+          currentTime: Math.min(prev.duration, prev.currentTime + 5),
+          isPlaying: true
+        }));
+        return;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, project.selectedElementId, project.elements, saveToHistory]);
 
   const handleSeek = useCallback((time: number) => {
     setProject(prev => ({ ...prev, currentTime: time }));
