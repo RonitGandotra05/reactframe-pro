@@ -9,6 +9,7 @@ import { ProjectState, Track, EditorElement, ElementType, ElementProps, Marker }
 import { DEFAULT_TRACKS, INITIAL_DURATION, PIXELS_PER_SECOND_DEFAULT } from './constants';
 import { getAssetById, getAssets, saveProjectState, loadProjectState } from './utils/db';
 import { historyManager, HistoryState } from './utils/history';
+import KeyboardShortcutsModal from './components/ui/KeyboardShortcutsModal';
 
 const OLD_STORAGE_KEY = 'reactframe_project'; // For migration from localStorage
 
@@ -28,6 +29,7 @@ function App() {
   const [isResizingLeft, setIsResizingLeft] = useState(false);
   const [isResizingRight, setIsResizingRight] = useState(false);
   const [rippleEditMode, setRippleEditMode] = useState(false); // DaVinci-style ripple edit
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
 
   const [project, setProject] = useState<ProjectState>({
     currentTime: 0,
@@ -796,6 +798,13 @@ function App() {
             {isDarkMode ? <SunIcon className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />}
           </button>
           <button
+            onClick={() => setShowKeyboardShortcuts(true)}
+            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 transition-colors"
+            title="Keyboard Shortcuts"
+          >
+            <span className="text-sm">⌨️</span>
+          </button>
+          <button
             onClick={() => setIsSettingsOpen(true)}
             className="text-xs px-3 py-1.5 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
@@ -901,6 +910,10 @@ function App() {
         />
       </div>
 
+      <KeyboardShortcutsModal
+        isOpen={showKeyboardShortcuts}
+        onClose={() => setShowKeyboardShortcuts(false)}
+      />
       <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
