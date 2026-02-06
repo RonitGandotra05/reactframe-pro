@@ -85,6 +85,18 @@ export interface ElementProps {
   gainR?: number; // -1 to 1, highlights red
   gainG?: number; // -1 to 1, highlights green
   gainB?: number; // -1 to 1, highlights blue
+
+  // Crop controls (percentage 0-100)
+  cropLeft?: number;
+  cropRight?: number;
+  cropTop?: number;
+  cropBottom?: number;
+
+  // Reverse playback
+  isReversed?: boolean;
+
+  // LUT preset (for quick color grading)
+  lutPreset?: 'none' | 'cinematic' | 'vintage' | 'cool' | 'warm' | 'noir' | 'teal-orange' | 'bleach-bypass';
 }
 
 export interface EditorElement {
@@ -115,6 +127,9 @@ export interface EditorElement {
 
   // For persisting media elements across page refreshes
   assetId?: string;
+
+  // Clip color label for organization (DaVinci-style)
+  clipColor?: 'none' | 'red' | 'orange' | 'yellow' | 'green' | 'cyan' | 'blue' | 'purple' | 'pink';
 }
 
 export interface Track {
