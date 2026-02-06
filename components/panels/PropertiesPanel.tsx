@@ -46,6 +46,30 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ element, onUpdate, on
                     />
                 </div>
 
+                {/* Clip Color Label */}
+                <div className="space-y-2">
+                    <label className="text-xs text-gray-500 uppercase font-bold">🏷️ Clip Color</label>
+                    <div className="flex gap-1 flex-wrap">
+                        {(['none', 'red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'pink'] as const).map((color) => (
+                            <button
+                                key={color}
+                                onClick={() => onUpdate(element.id, { clipColor: color })}
+                                className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 ${element.clipColor === color || (!element.clipColor && color === 'none')
+                                    ? 'border-white dark:border-gray-300 ring-2 ring-blue-500'
+                                    : 'border-transparent'
+                                    }`}
+                                style={{
+                                    backgroundColor: color === 'none' ? 'transparent' : color === 'cyan' ? '#06b6d4' : color,
+                                    backgroundImage: color === 'none' ? 'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)' : undefined,
+                                    backgroundSize: color === 'none' ? '6px 6px' : undefined,
+                                    backgroundPosition: color === 'none' ? '0 0, 0 3px, 3px -3px, -3px 0px' : undefined
+                                }}
+                                title={color === 'none' ? 'No color' : color.charAt(0).toUpperCase() + color.slice(1)}
+                            />
+                        ))}
+                    </div>
+                </div>
+
                 {/* Layer Order Controls */}
                 {element.type !== ElementType.AUDIO && (
                     <div className="space-y-2 pt-4 border-t border-gray-200 dark:border-gray-800">
@@ -199,6 +223,17 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ element, onUpdate, on
                                     <span>4x</span>
                                 </div>
                             </div>
+                        )}
+
+                        {/* Reverse Playback Toggle */}
+                        {(element.type === ElementType.VIDEO || element.type === ElementType.AUDIO) && (
+                            <button
+                                onClick={() => handleChange('isReversed', !element.props.isReversed)}
+                                className={`w-full py-1.5 border rounded text-xs transition flex items-center justify-center space-x-1 ${element.props.isReversed ? 'bg-pink-100 dark:bg-pink-900/50 text-pink-600 dark:text-pink-400 border-pink-200 dark:border-pink-800' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                            >
+                                <span>⏪</span>
+                                <span>Reverse Playback</span>
+                            </button>
                         )}
 
                         {/* Split Audio button - only for VIDEO elements */}
@@ -473,6 +508,94 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ element, onUpdate, on
                         >
                             Reset Filters
                         </button>
+                    </div>
+                )}
+
+                {/* Crop Controls */}
+                {(element.type === ElementType.VIDEO || element.type === ElementType.IMAGE) && (
+                    <div className="space-y-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+                        <label className="text-xs text-gray-500 uppercase font-bold">✂️ Crop</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <span className="text-[10px] text-gray-500">Left ({element.props.cropLeft ?? 0}%)</span>
+                                <input
+                                    type="range" min="0" max="50" step="1"
+                                    value={element.props.cropLeft ?? 0}
+                                    onChange={(e) => handleChange('cropLeft', Number(e.target.value))}
+                                    className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                />
+                            </div>
+                            <div>
+                                <span className="text-[10px] text-gray-500">Right ({element.props.cropRight ?? 0}%)</span>
+                                <input
+                                    type="range" min="0" max="50" step="1"
+                                    value={element.props.cropRight ?? 0}
+                                    onChange={(e) => handleChange('cropRight', Number(e.target.value))}
+                                    className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                />
+                            </div>
+                            <div>
+                                <span className="text-[10px] text-gray-500">Top ({element.props.cropTop ?? 0}%)</span>
+                                <input
+                                    type="range" min="0" max="50" step="1"
+                                    value={element.props.cropTop ?? 0}
+                                    onChange={(e) => handleChange('cropTop', Number(e.target.value))}
+                                    className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                />
+                            </div>
+                            <div>
+                                <span className="text-[10px] text-gray-500">Bottom ({element.props.cropBottom ?? 0}%)</span>
+                                <input
+                                    type="range" min="0" max="50" step="1"
+                                    value={element.props.cropBottom ?? 0}
+                                    onChange={(e) => handleChange('cropBottom', Number(e.target.value))}
+                                    className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                />
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => {
+                                handleChange('cropLeft', 0);
+                                handleChange('cropRight', 0);
+                                handleChange('cropTop', 0);
+                                handleChange('cropBottom', 0);
+                            }}
+                            className="w-full py-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 rounded text-xs text-gray-600 dark:text-gray-400 transition"
+                        >
+                            Reset Crop
+                        </button>
+                    </div>
+                )}
+
+                {/* LUT Presets */}
+                {(element.type === ElementType.VIDEO || element.type === ElementType.IMAGE || element.type === ElementType.ADJUSTMENT) && (
+                    <div className="space-y-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+                        <label className="text-xs text-gray-500 uppercase font-bold">🎬 LUT Presets</label>
+                        <div className="grid grid-cols-2 gap-1.5">
+                            {([
+                                { value: 'none', label: 'None', colors: ['#888', '#888'] },
+                                { value: 'cinematic', label: 'Cinematic', colors: ['#3b5998', '#ff8c00'] },
+                                { value: 'vintage', label: 'Vintage', colors: ['#d4a574', '#8b6914'] },
+                                { value: 'cool', label: 'Cool', colors: ['#6dd5ed', '#2193b0'] },
+                                { value: 'warm', label: 'Warm', colors: ['#ff9a56', '#f7971e'] },
+                                { value: 'noir', label: 'Noir', colors: ['#232526', '#414345'] },
+                                { value: 'teal-orange', label: 'Teal & Orange', colors: ['#008080', '#ff6347'] },
+                                { value: 'bleach-bypass', label: 'Bleach', colors: ['#e0e0e0', '#a0a0a0'] }
+                            ] as const).map((lut) => (
+                                <button
+                                    key={lut.value}
+                                    onClick={() => handleChange('lutPreset', lut.value)}
+                                    className={`py-1.5 px-2 rounded text-[10px] font-medium border transition ${element.props.lutPreset === lut.value || (!element.props.lutPreset && lut.value === 'none') ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200 dark:border-gray-700 hover:border-gray-400'}`}
+                                    style={{
+                                        background: lut.value === 'none' ? undefined : `linear-gradient(135deg, ${lut.colors[0]}, ${lut.colors[1]})`
+                                    }}
+                                >
+                                    <span className={lut.value === 'none' ? 'text-gray-600 dark:text-gray-400' : 'text-white drop-shadow-sm'}>
+                                        {lut.label}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 )}
 
