@@ -30,6 +30,7 @@ function App() {
   const [isResizingLeft, setIsResizingLeft] = useState(false);
   const [isResizingRight, setIsResizingRight] = useState(false);
   const [rippleEditMode, setRippleEditMode] = useState(false); // DaVinci-style ripple edit
+  const [snapEnabled, setSnapEnabled] = useState(true); // Magnetic snap toggle
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
 
   const [project, setProject] = useState<ProjectState>({
@@ -747,6 +748,56 @@ function App() {
     });
   };
 
+  // Close all gaps between clips - slides clips left to remove empty space
+  const handleCloseGaps = () => {
+    saveToHistory();
+    setProject(prev => {
+      // Group elements by track
+      const elementsByTrack = new Map<number, EditorElement[]>();
+      prev.elements.forEach(el => {
+        const trackElements = elementsByTrack.get(el.trackId) || [];
+        trackElements.push(el);
+        elementsByTrack.set(el.trackId, trackElements);
+      });
+
+      // Process each track independently
+      const updatedElements = prev.elements.map(el => {
+        const trackElements = elementsByTrack.get(el.trackId) || [];
+        // Sort elements on this track by start time
+        const sorted = [...trackElements].sort((a, b) => a.startTime - b.startTime);
+
+        // Find this element's position in the sorted list
+        const index = sorted.findIndex(e => e.id === el.id);
+
+        if (index === 0) {
+          // First element on track - move to time 0
+          return { ...el, startTime: 0 };
+        } else {
+          // Calculate new start time based on previous element's end
+          const prevElement = sorted[index - 1];
+          const prevEnd = prevElement.startTime + prevElement.duration;
+
+          // Only move if there's a gap
+          if (el.startTime > prevEnd) {
+            // But we need to recalculate based on potentially moved previous elements
+            // For a proper implementation, we do this in order
+            let newStartTime = 0;
+            for (let i = 0; i < index; i++) {
+              newStartTime += sorted[i].duration;
+            }
+            return { ...el, startTime: newStartTime };
+          }
+          return el;
+        }
+      });
+
+      return {
+        ...prev,
+        elements: updatedElements
+      };
+    });
+  };
+
   const handleExport = async () => {
     if (!previewRef.current) return;
     if (!confirm("Start recording playback for export? The video will play from start to finish.")) return;
@@ -983,6 +1034,9 @@ function App() {
           onDeleteTrack={handleDeleteTrack}
           rippleEditMode={rippleEditMode}
           onToggleRippleEdit={() => setRippleEditMode(!rippleEditMode)}
+          snapEnabled={snapEnabled}
+          onToggleSnap={() => setSnapEnabled(!snapEnabled)}
+          onCloseGaps={handleCloseGaps}
         />
       </div>
 
