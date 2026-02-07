@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { LayersIcon, DownloadIcon, SunIcon, MoonIcon } from './components/ui/Icons';
+import { LayersIcon, DownloadIcon, SunIcon, MoonIcon, SaveIcon, FolderOpenIcon } from './components/ui/Icons';
 import AssetsPanel from './components/panels/AssetsPanel';
 import SettingsPanel from './components/panels/SettingsPanel';
 import PropertiesPanel from './components/panels/PropertiesPanel';
@@ -8,6 +8,7 @@ import Timeline from './components/timeline/Timeline';
 import { ProjectState, Track, EditorElement, ElementType, ElementProps, Marker } from './types';
 import { DEFAULT_TRACKS, INITIAL_DURATION, PIXELS_PER_SECOND_DEFAULT } from './constants';
 import { getAssetById, getAssets, saveProjectState, loadProjectState } from './utils/db';
+import { saveProjectToFile, openProjectFilePicker } from './utils/projectFile';
 import { historyManager, HistoryState } from './utils/history';
 import KeyboardShortcutsModal from './components/ui/KeyboardShortcutsModal';
 
@@ -781,6 +782,64 @@ function App() {
     }
   };
 
+  // ==================== SAVE/LOAD PROJECT FILE HANDLERS ====================
+
+  /**
+   * Save the current project to a downloadable .motionlabs file
+   * This file can be shared and opened on any device
+   */
+  const handleSaveProject = async () => {
+    try {
+      await saveProjectToFile(
+        project.elements,
+        project.tracks,
+        project.markers,
+        'motion-labs-project'
+      );
+    } catch (error) {
+      console.error('Failed to save project:', error);
+      alert('Failed to save project. Please try again.');
+    }
+  };
+
+  /**
+   * Load a project from a .motionlabs file
+   * Replaces the current project with the loaded one
+   */
+  const handleLoadProject = async () => {
+    // Confirm before loading (will replace current project)
+    if (project.elements.length > 0) {
+      const confirmed = confirm(
+        'Loading a project will replace your current work. Continue?'
+      );
+      if (!confirmed) return;
+    }
+
+    try {
+      const loadedProject = await openProjectFilePicker();
+      if (loadedProject) {
+        // Save current state to history before replacing
+        saveToHistory();
+
+        // Update project with loaded data
+        setProject(prev => ({
+          ...prev,
+          elements: loadedProject.elements,
+          tracks: loadedProject.tracks.length > 0 ? loadedProject.tracks : DEFAULT_TRACKS,
+          markers: loadedProject.markers || [],
+          selectedElementId: null,
+          currentTime: 0
+        }));
+
+        // Also save to IndexedDB for persistence
+        await saveProjectState(loadedProject.elements, loadedProject.tracks);
+      }
+    } catch (error) {
+      console.error('Failed to load project:', error);
+      alert('Failed to load project. Please ensure the file is valid.');
+    }
+  };
+
   const selectedElement = project.elements.find(el => el.id === project.selectedElementId) || null;
 
   return (
@@ -810,7 +869,24 @@ function App() {
           >
             Settings
           </button>
-          <div className="text-xs text-gray-500 dark:text-gray-500">v2.2-smart-layers</div>
+          {/* Save/Load Project Buttons */}
+          <button
+            onClick={handleSaveProject}
+            className="text-xs px-3 py-1.5 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex items-center space-x-1.5"
+            title="Save project to file (.motionlabs)"
+          >
+            <SaveIcon className="w-3.5 h-3.5" />
+            <span>Save</span>
+          </button>
+          <button
+            onClick={handleLoadProject}
+            className="text-xs px-3 py-1.5 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex items-center space-x-1.5"
+            title="Load project from file (.motionlabs)"
+          >
+            <FolderOpenIcon className="w-3.5 h-3.5" />
+            <span>Load</span>
+          </button>
+          <div className="text-xs text-gray-500 dark:text-gray-500">v2.3-save-load</div>
           <button
             onClick={handleExport}
             className="bg-blue-600 hover:bg-blue-700 dark:hover:bg-blue-500 px-4 py-1.5 rounded text-xs font-semibold transition flex items-center space-x-2 text-white shadow-sm"
