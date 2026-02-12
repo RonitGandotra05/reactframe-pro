@@ -38,6 +38,9 @@ export interface ElementProps {
   borderWidth?: number;
   volume?: number; // 0-1
   isMuted?: boolean;
+  // Audio Ducking
+  ducking?: boolean; // If true, lowers volume of other tracks when this plays
+  duckingThreshold?: number; // 0-1, how much to lower others (e.g. 0.2 = 20% volume)
 
   // Text styling
   fontFamily?: string;
