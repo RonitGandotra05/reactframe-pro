@@ -11,10 +11,12 @@ import { getAssetById, getAssets, saveProjectState, loadProjectState } from './u
 import { saveProjectToFile, openProjectFilePicker } from './utils/projectFile';
 import { historyManager, HistoryState } from './utils/history';
 import KeyboardShortcutsModal from './components/ui/KeyboardShortcutsModal';
+import ExportModal from './components/ui/ExportModal';
 
 const OLD_STORAGE_KEY = 'reactframe_project'; // For migration from localStorage
 
 function App() {
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const previewRef = useRef<VideoPreviewHandle>(null);
   const [pixelsPerSecond, setPixelsPerSecond] = useState(PIXELS_PER_SECOND_DEFAULT);
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -829,13 +831,20 @@ function App() {
     }));
   };
 
-  const handleExport = async () => {
+  const handleExport = () => {
+    setIsExportModalOpen(true);
+  };
+
+  const startExport = async (filename: string, fps: number) => {
+    setIsExportModalOpen(false);
     if (!previewRef.current) return;
-    if (!confirm("Start recording playback for export? The video will play from start to finish.")) return;
+
+    // Safety check just in case modal didn't close or something
+    if (!confirm(`Start recording playback for "${filename}" at ${fps} FPS? The video will play from start to finish.`)) return;
 
     try {
       setProject(prev => ({ ...prev, currentTime: 0, isPlaying: true }));
-      const stream = previewRef.current.captureStream(30);
+      const stream = previewRef.current.captureStream(fps);
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
 
       const chunks: BlobPart[] = [];
@@ -848,7 +857,7 @@ function App() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `reactframe_project_${Date.now()}.webm`;
+        a.download = `${filename}.webm`;
         a.click();
         setProject(prev => ({ ...prev, isPlaying: false }));
       };
@@ -1080,6 +1089,12 @@ function App() {
         onClose={() => setShowKeyboardShortcuts(false)}
       />
       <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        onExport={startExport}
+        duration={project.duration}
+      />
     </div>
   );
 }
