@@ -798,6 +798,37 @@ function App() {
     });
   };
 
+  // Timeline Markers Handlers
+  const handleAddMarker = (time: number) => {
+    const newMarker: Marker = {
+      id: Math.random().toString(36).substr(2, 9),
+      time,
+      name: 'Marker',
+      color: 'blue'
+    };
+    saveToHistory();
+    setProject(prev => ({
+      ...prev,
+      markers: [...prev.markers, newMarker].sort((a, b) => a.time - b.time)
+    }));
+  };
+
+  const handleUpdateMarker = (id: string, updates: Partial<Marker>) => {
+    saveToHistory();
+    setProject(prev => ({
+      ...prev,
+      markers: prev.markers.map(m => m.id === id ? { ...m, ...updates } : m).sort((a, b) => a.time - b.time)
+    }));
+  };
+
+  const handleDeleteMarker = (id: string) => {
+    saveToHistory();
+    setProject(prev => ({
+      ...prev,
+      markers: prev.markers.filter(m => m.id !== id)
+    }));
+  };
+
   const handleExport = async () => {
     if (!previewRef.current) return;
     if (!confirm("Start recording playback for export? The video will play from start to finish.")) return;
@@ -1037,6 +1068,10 @@ function App() {
           snapEnabled={snapEnabled}
           onToggleSnap={() => setSnapEnabled(!snapEnabled)}
           onCloseGaps={handleCloseGaps}
+          markers={project.markers}
+          onAddMarker={handleAddMarker}
+          onUpdateMarker={handleUpdateMarker}
+          onDeleteMarker={handleDeleteMarker}
         />
       </div>
 

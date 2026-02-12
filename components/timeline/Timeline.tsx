@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Track, EditorElement } from '../../types';
+import { Track, EditorElement, Marker } from '../../types';
 import TimelineTrack from './TimelineTrack';
 import { ScissorsIcon, ZoomInIcon, ZoomOutIcon, MagnetIcon, CompressIcon, FitIcon } from '../ui/Icons';
 
@@ -23,6 +23,10 @@ interface TimelineProps {
   snapEnabled?: boolean;
   onToggleSnap?: () => void;
   onCloseGaps?: () => void;
+  markers?: Marker[];
+  onAddMarker?: (time: number) => void;
+  onUpdateMarker?: (id: string, updates: Partial<Marker>) => void;
+  onDeleteMarker?: (id: string) => void;
 }
 
 type DragMode = 'MOVE' | 'RESIZE_L' | 'RESIZE_R';
@@ -49,7 +53,11 @@ const Timeline: React.FC<TimelineProps> = ({
   onToggleRippleEdit,
   snapEnabled = true,
   onToggleSnap,
-  onCloseGaps
+  onCloseGaps,
+  markers = [],
+  onAddMarker,
+  onUpdateMarker,
+  onDeleteMarker
 }) => {
   const rulerRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -289,10 +297,10 @@ const Timeline: React.FC<TimelineProps> = ({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const markers = [];
+  const rulerTicks = [];
   const totalWidth = Math.max(duration, 60) * pixelsPerSecond + 500;
   for (let i = 0; i < Math.max(duration, 60); i++) {
-    markers.push(
+    rulerTicks.push(
       <div key={i} className="absolute top-0 bottom-0 border-l border-gray-300 dark:border-gray-700 text-[10px] text-gray-500 dark:text-gray-500 pl-1 select-none transition-colors" style={{ left: i * pixelsPerSecond }}>
         {i % 5 === 0 ? formatTime(i) : ''}
       </div>
@@ -404,7 +412,7 @@ const Timeline: React.FC<TimelineProps> = ({
             onMouseDown={handleRulerMouseDown}
           >
             <div className="w-24 h-full border-r border-gray-200 dark:border-gray-700 absolute left-0 bg-gray-100 dark:bg-gray-800 z-20 transition-colors"></div>
-            <div className="absolute left-24 right-0 top-0 bottom-0">{markers}</div>
+            <div className="absolute left-24 right-0 top-0 bottom-0">{rulerTicks}</div>
           </div>
 
           {/* Tracks */}
